@@ -550,3 +550,54 @@ async def cancel_edit(callback: CallbackQuery, state: FSMContext):
 @router.callback_query(F.data == "ignore")
 async def ignore_callback(callback: CallbackQuery):
     await callback.answer()
+@router.callback_query(EditProfileStates.editing_interests, F.data.startswith("edit_interest_"))
+async def toggle_interest_edit(callback: CallbackQuery, state: FSMContext):
+    """Выбор/отмена интереса при редактировании"""
+    print(f"\n🔍 ===== ВЫЗОВ toggle_interest_edit =====")
+    print(f"🔍 Callback data: {callback.data}")
+    print(f"🔍 From user: {callback.from_user.id}")
+    
+    try:
+        interest_id = int(callback.data.split("_")[2])
+        print(f"🔍 Выбран интерес ID: {interest_id}")
+        
+        data = await state.get_data()
+        print(f"🔍 Текущие данные state: {data}")
+        
+        selected = data.get('selected_interests', [])
+        print(f"🔍 Текущие выбранные: {selected}")
+        
+        if interest_id in selected:
+            selected.remove(interest_id)
+            print(f"❌ Интерес {interest_id} удален")
+        else:
+            selected.append(interest_id)
+            print(f"✅ Интерес {interest_id} добавлен")
+        
+        await state.update_data(selected_interests=selected)
+        print(f"🔍 Новые выбранные: {selected}")
+        
+        # Обновляем клавиатуру
+        from database.requests import get_all_interests
+        from handlers.interests import get_interests_keyboard, format_interests_text
+        
+        all_interests = await get_all_interests()
+        keyboard = await get_interests_keyboard(all_interests, selected, "edit_interest")
+        selected_text = format_interests_text(selected, all_interests)
+        
+        await callback.message.edit_text(
+            f"🎯 *Редактирование интересов*\n\n"
+            f"{selected_text}\n\n"
+            f"👉 Нажимай на интересы, чтобы изменить выбор\n"
+            f"✅ Минимум 3 интереса",
+            parse_mode="Markdown",
+            reply_markup=keyboard
+        )
+        print("✅ Сообщение обновлено")
+        await callback.answer()
+        
+    except Exception as e:
+        print(f"❌ ОШИБКА в toggle_interest_edit: {e}")
+        import traceback
+        traceback.print_exc()
+        await callback.answer("❌ Ошибка при выборе", show_alert=True)

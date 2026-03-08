@@ -35,8 +35,8 @@ async def get_interests_keyboard(all_interests, selected_ids, action_prefix="int
         # Получаем смайлик для категории (или ставим точку, если нет в словаре)
         emoji = CATEGORY_EMOJIS.get(category, "•")
         
-        # Заголовок категории с тематическим смайликом
-        builder.button(text=f"{emoji} {category}", callback_data="ignore")
+        # Заголовок категории с тематическим смайликом (некликабельный)
+        builder.button(text=f"{emoji} {category}", callback_data="ignore_category")
         
         # Интересы в категории
         for interest in cat_interests:
@@ -74,5 +74,26 @@ def format_interests_text(selected_ids, all_interests):
 
 @router.callback_query(F.data == "interests_scroll_top")
 async def interests_scroll_top(callback: CallbackQuery):
-    """Прокрутка вверх (просто подтверждение)"""
-    await callback.answer("👆 Ты в начале списка")
+    """Прокрутка вверх"""
+    print("🔍 НАЖАТА КНОПКА: interests_scroll_top")
+    await callback.answer("👆 Ты в начале списка", show_alert=False)
+
+@router.callback_query(F.data == "ignore_category")
+async def ignore_category(callback: CallbackQuery):
+    """Заглушка для некликабельных заголовков категорий"""
+    print("🔍 НАЖАТ НЕКЛИКАБЕЛЬНЫЙ ЗАГОЛОВОК")
+    await callback.answer()
+
+@router.callback_query(F.data == "interests_save")
+async def interests_save(callback: CallbackQuery):
+    """Сохранение интересов"""
+    print("🔍 НАЖАТА КНОПКА: interests_save")
+    # Этот обработчик будет переопределен в registration.py и profile.py
+    await callback.answer()
+
+@router.callback_query(F.data == "interests_back")
+async def interests_back(callback: CallbackQuery):
+    """Назад"""
+    print("🔍 НАЖАТА КНОПКА: interests_back")
+    # Этот обработчик будет переопределен в registration.py и profile.py
+    await callback.answer()

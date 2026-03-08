@@ -28,6 +28,58 @@ MINSK_DISTRICTS = [
 def check_age(age: int) -> bool:
     return 18 <= age <= 29
 
+@router.callback_query(RegistrationStates.waiting_for_interests, F.data.startswith("reg_interest_"))
+async def toggle_interest_reg(callback: CallbackQuery, state: FSMContext):
+    """Выбор/отмена интереса при регистрации"""
+    print(f"\n🔍 ===== ВЫЗОВ toggle_interest_reg =====")
+    print(f"🔍 Callback data: {callback.data}")
+    print(f"🔍 From user: {callback.from_user.id}")
+    
+    try:
+        interest_id = int(callback.data.split("_")[2])
+        print(f"🔍 Выбран интерес ID: {interest_id}")
+        
+        data = await state.get_data()
+        print(f"🔍 Текущие данные state: {data}")
+        
+        selected = data.get('selected_interests', [])
+        print(f"🔍 Текущие выбранные: {selected}")
+        
+        if interest_id in selected:
+            selected.remove(interest_id)
+            print(f"❌ Интерес {interest_id} удален")
+        else:
+            selected.append(interest_id)
+            print(f"✅ Интерес {interest_id} добавлен")
+        
+        await state.update_data(selected_interests=selected)
+        print(f"🔍 Новые выбранные: {selected}")
+        
+        # Обновляем клавиатуру
+        from database.requests import get_all_interests
+        from handlers.interests import get_interests_keyboard, format_interests_text
+        
+        interests = await get_all_interests()
+        keyboard = await get_interests_keyboard(interests, selected, "reg_interest")
+        selected_text = format_interests_text(selected, interests)
+        
+        await callback.message.edit_text(
+            f"🌸 *Выбери свои интересы*\n\n"
+            f"{selected_text}\n\n"
+            f"👉 Нажимай на интересы, чтобы выбрать\n"
+            f"✅ Минимум 3 интереса",
+            parse_mode="Markdown",
+            reply_markup=keyboard
+        )
+        print("✅ Сообщение обновлено")
+        await callback.answer()
+        
+    except Exception as e:
+        print(f"❌ ОШИБКА в toggle_interest_reg: {e}")
+        import traceback
+        traceback.print_exc()
+        await callback.answer("❌ Ошибка при выборе", show_alert=True)
+
 @router.message(Command("start"))
 async def cmd_start(message: Message, state: FSMContext):
     user_id = message.from_user.id
