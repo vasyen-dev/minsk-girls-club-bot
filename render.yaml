@@ -2,9 +2,8 @@ services:
   - type: web
     name: minsk-girls-club-bot
     runtime: python
-    buildCommand: pip install -r requirements.txt
+    buildCommand: pip install --no-cache-dir -r requirements.txt
     startCommand: python bot.py
-    healthCheckPath: /health
     envVars:
       - key: BOT_TOKEN
         sync: false
