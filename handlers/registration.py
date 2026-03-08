@@ -38,7 +38,7 @@ async def cmd_start(message: Message, state: FSMContext):
     
     await state.set_state(RegistrationStates.waiting_for_name)
     await message.answer(
-        "🌸 Привет! Это *SVOI Minsk Girls* — клуб для своих\n\n"
+        "🌸 Привет! Это *Minsk Girls Club* — клуб для своих\n\n"
         "Давай познакомимся! Как тебя зовут?\n"
         "(Можно имя или ник, как тебе комфортно)",
         parse_mode="Markdown"
@@ -183,31 +183,39 @@ async def show_interests_selection(message: Message, state: FSMContext):
 @router.callback_query(RegistrationStates.waiting_for_interests, F.data.startswith("reg_interest_"))
 async def toggle_interest_reg(callback: CallbackQuery, state: FSMContext):
     """Выбор/отмена интереса при регистрации"""
-    interest_id = int(callback.data.split("_")[2])
-    data = await state.get_data()
-    selected = data.get('selected_interests', [])
-    
-    if interest_id in selected:
-        selected.remove(interest_id)
-    else:
-        selected.append(interest_id)
-    
-    await state.update_data(selected_interests=selected)
-    
-    # Обновляем клавиатуру
-    interests = await get_all_interests()
-    keyboard = await get_interests_keyboard(interests, selected, "reg_interest")
-    selected_text = format_interests_text(selected, interests)
-    
-    await callback.message.edit_text(
-        f"🌸 *Выбери свои интересы*\n\n"
-        f"{selected_text}\n\n"
-        f"👉 Нажимай на интересы, чтобы выбрать\n"
-        f"✅ Минимум 3 интереса",
-        parse_mode="Markdown",
-        reply_markup=keyboard
-    )
-    await callback.answer()
+    try:
+        interest_id = int(callback.data.split("_")[2])
+        print(f"🔍 Выбран интерес ID: {interest_id}")
+        
+        data = await state.get_data()
+        selected = data.get('selected_interests', [])
+        
+        if interest_id in selected:
+            selected.remove(interest_id)
+            print(f"❌ Интерес {interest_id} удален")
+        else:
+            selected.append(interest_id)
+            print(f"✅ Интерес {interest_id} добавлен")
+        
+        await state.update_data(selected_interests=selected)
+        
+        # Обновляем клавиатуру
+        interests = await get_all_interests()
+        keyboard = await get_interests_keyboard(interests, selected, "reg_interest")
+        selected_text = format_interests_text(selected, interests)
+        
+        await callback.message.edit_text(
+            f"🌸 *Выбери свои интересы*\n\n"
+            f"{selected_text}\n\n"
+            f"👉 Нажимай на интересы, чтобы выбрать\n"
+            f"✅ Минимум 3 интереса",
+            parse_mode="Markdown",
+            reply_markup=keyboard
+        )
+        await callback.answer()
+    except Exception as e:
+        print(f"❌ Ошибка в toggle_interest_reg: {e}")
+        await callback.answer("❌ Ошибка при выборе", show_alert=True)
 
 @router.callback_query(RegistrationStates.waiting_for_interests, F.data == "interests_save")
 async def interests_save_reg(callback: CallbackQuery, state: FSMContext):
@@ -239,7 +247,7 @@ async def interests_save_reg(callback: CallbackQuery, state: FSMContext):
     await state.clear()
     
     await callback.message.edit_text(
-        "💗 *Поздравляем! Ты стала частью SVOI Minsk Girls!*\n\n"
+        "💗 *Поздравляем! Ты стала частью Minsk Girls Club!*\n\n"
         "Теперь ты можешь:\n"
         "🌸 Находить мероприятия по душе\n"
         "✨ Создавать свои встречи\n"
