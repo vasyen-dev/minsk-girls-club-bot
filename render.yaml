@@ -2,9 +2,11 @@ services:
   - type: web
     name: minsk-girls-club-bot
     runtime: python
-    buildCommand: pip install --no-cache-dir -r requirements.txt
+    buildCommand: pip install -r requirements.txt
     startCommand: python bot.py
     envVars:
+      - key: POETRY_VERSION
+        value: ""
       - key: BOT_TOKEN
         sync: false
       - key: ADMIN_IDS
