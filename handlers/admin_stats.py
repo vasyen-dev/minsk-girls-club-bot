@@ -225,3 +225,46 @@ async def cmd_user_info(message: Message):
             parse_mode="Markdown",
             reply_markup=builder.as_markup()
         )
+@router.message(Command("add_interests"), F.from_user.id.in_(ADMIN_IDS))
+async def cmd_add_interests(message: Message):
+    """Добавить интересы в базу данных (только для админов)"""
+    from database.requests import Session
+    from database.models import Interest
+    
+    interests_data = [
+        {"name": "Йога", "category": "Красота и здоровье"},
+        {"name": "Фитнес", "category": "Красота и здоровье"},
+        {"name": "Макияж", "category": "Красота и здоровье"},
+        {"name": "Маникюр", "category": "Красота и здоровье"},
+        {"name": "SPA", "category": "Красота и здоровье"},
+        {"name": "Мастер-классы", "category": "Творчество"},
+        {"name": "Рисование", "category": "Творчество"},
+        {"name": "Керамика", "category": "Творчество"},
+        {"name": "Свечи", "category": "Творчество"},
+        {"name": "Фотосессии", "category": "Творчество"},
+        {"name": "Девичник", "category": "Общение"},
+        {"name": "Бизнес-завтрак", "category": "Общение"},
+        {"name": "Book club", "category": "Общение"},
+        {"name": "Вайн-тайм", "category": "Общение"},
+        {"name": "Психология", "category": "Общение"},
+        {"name": "Танцы", "category": "Активности"},
+        {"name": "Зумба", "category": "Активности"},
+        {"name": "Прогулки", "category": "Активности"},
+        {"name": "Кино", "category": "Развлечения"},
+        {"name": "Настолки", "category": "Развлечения"},
+        {"name": "Антикафе", "category": "Развлечения"},
+        {"name": "Квизы", "category": "Развлечения"},
+    ]
+    
+    with Session() as session:
+        # Проверяем, есть ли уже интересы
+        if session.query(Interest).count() > 0:
+            await message.answer("❌ Интересы уже есть в базе")
+            return
+        
+        for item in interests_data:
+            interest = Interest(name=item["name"], category=item["category"])
+            session.add(interest)
+        session.commit()
+        
+        await message.answer(f"✅ Добавлено {len(interests_data)} интересов!")
