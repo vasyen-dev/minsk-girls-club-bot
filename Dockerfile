@@ -2,15 +2,18 @@ FROM python:3.11.9-slim
 
 WORKDIR /app
 
-# Копируем только requirements.txt сначала (для кэширования)
+# Сначала копируем только файл с зависимостями
 COPY requirements.txt .
 
-# Принудительно обновляем pip и устанавливаем с verbose-выводом
+# Убедимся, что файл скопирован (для отладки)
+RUN echo "=== СОДЕРЖИМОЕ REQUIREMENTS.TXT ===" && cat requirements.txt && echo "=== КОНЕЦ ==="
+
+# Обновляем pip и устанавливаем зависимости с подробным выводом
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -v -r requirements.txt
 
-# Добавляем проверку, что библиотеки реально установились
-RUN python -c "import aiogram; print('✅ aiogram installed successfully')" || (echo '❌ aiogram NOT installed' && exit 1)
+# Проверяем, что библиотеки реально установились
+RUN python -c "import aiogram; print('✅ aiogram установлен!')"
 
 # Копируем остальной код
 COPY . .
