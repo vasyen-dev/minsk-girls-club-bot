@@ -11,28 +11,21 @@ from scheduler import on_startup
 from config import BOT_TOKEN, ADMIN_IDS
 
 # ---------- HEALTH CHECK SERVER (для Render) ----------
-# Это мини-веб-сервер, который будет отвечать на запросы Render
-# и не давать сервису "засыпать"
-
 health_app = Flask(__name__)
 
 @health_app.route('/health')
 def health():
-    """Эндпоинт для проверки здоровья сервиса"""
     return "OK", 200
 
 @health_app.route('/')
 def home():
-    """Главная страница для проверки"""
     return "Minsk Girls Club Bot is running!", 200
 
 def run_health_server():
-    """Запускает Flask-сервер в отдельном потоке"""
     port = int(os.environ.get('PORT', 10000))
     health_app.run(host='0.0.0.0', port=port, debug=False, use_reloader=False)
 
 # Запускаем health-сервер в фоновом потоке
-# Это произойдет ДО запуска основного бота
 threading.Thread(target=run_health_server, daemon=True).start()
 print(f"✅ Health check server started on port {os.environ.get('PORT', 10000)}")
 
@@ -49,15 +42,17 @@ bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher(storage=MemoryStorage())
 
 # Подключаем все роутеры
+print("🔹 Подключение роутеров...")
 dp.include_router(registration.router)
 dp.include_router(profile.router)
 dp.include_router(create_event.router)
-dp.include_router(moderation.router)
+dp.include_router(moderation.router)  # ← ВАЖНО: роутер модерации подключен!
 dp.include_router(events.router)
 dp.include_router(my_plans.router)
 dp.include_router(friends.router)
 dp.include_router(chat.router)
 dp.include_router(admin_stats.router)
+print("✅ Все роутеры подключены")
 
 async def main():
     # Запускаем планировщик
