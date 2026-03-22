@@ -1,3 +1,4 @@
+from handlers.categories import EVENT_CATEGORIES
 from aiogram import Router, F
 from aiogram.types import Message, CallbackQuery
 from aiogram.utils.keyboard import InlineKeyboardBuilder, ReplyKeyboardBuilder
@@ -36,32 +37,23 @@ async def show_filters_menu(message: Message):
     
     await message.answer(filter_text, parse_mode="Markdown", reply_markup=builder.as_markup())
 
-@router.callback_query(F.data == "filter_interest")
-async def filter_interest(callback: CallbackQuery):
-    """Выбор фильтра по интересам"""
-    interests = await get_all_interests()
+@router.callback_query(F.data.startswith("interest_"))
+async def interest_selected(callback: CallbackQuery):
+    """Выбрана конкретная категория"""
+    user_id = callback.from_user.id
     
-    builder = InlineKeyboardBuilder()
-    builder.button(text="📌 Все интересы", callback_data="interest_all")
+    if callback.data == "interest_all":
+        if user_id in user_filters:
+            user_filters[user_id].pop('interest', None)
+            user_filters[user_id].pop('interest_id', None)
+    else:
+        category = callback.data.split("_")[1]  # interest_Творчество
+        if user_id not in user_filters:
+            user_filters[user_id] = {}
+        user_filters[user_id]['interest'] = category
+        # interest_id оставляем пустым, будем искать по названию
     
-    categories = {}
-    for interest in interests:
-        if interest.category not in categories:
-            categories[interest.category] = []
-        categories[interest.category].append(interest)
-    
-    for category, cat_interests in categories.items():
-        for interest in cat_interests:
-            builder.button(text=f"{interest.name}", callback_data=f"interest_{interest.id}")
-    
-    builder.button(text="◀️ Назад", callback_data="back_to_filters")
-    builder.adjust(2)
-    
-    await callback.message.edit_text(
-        "🎯 *Выбери интерес*",
-        parse_mode="Markdown",
-        reply_markup=builder.as_markup()
-    )
+    await show_filters_menu(callback.message)
     await callback.answer()
 
 @router.callback_query(F.data.startswith("interest_"))

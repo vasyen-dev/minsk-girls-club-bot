@@ -5,80 +5,20 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.utils.keyboard import InlineKeyboardBuilder, ReplyKeyboardBuilder
 
-from database.requests import add_user, user_exists, get_all_interests, add_user_interests
-from handlers.interests import get_interests_keyboard, format_interests_text
+from database.requests import add_user, user_exists
+from handlers.categories import EVENT_CATEGORIES
 
 router = Router()
 
 class RegistrationStates(StatesGroup):
     waiting_for_name = State()
     waiting_for_age = State()
-    waiting_for_district = State()
     waiting_for_bio = State()
     waiting_for_photo = State()
-    waiting_for_interests = State()
     waiting_for_instagram = State()
-
-MINSK_DISTRICTS = [
-    "Центральный", "Советский", "Первомайский",
-    "Партизанский", "Заводской", "Ленинский",
-    "Октябрьский", "Московский", "Фрунзенский"
-]
 
 def check_age(age: int) -> bool:
     return 18 <= age <= 29
-
-@router.callback_query(RegistrationStates.waiting_for_interests, F.data.startswith("reg_interest_"))
-async def toggle_interest_reg(callback: CallbackQuery, state: FSMContext):
-    """Выбор/отмена интереса при регистрации"""
-    print(f"\n🔍 ===== ВЫЗОВ toggle_interest_reg =====")
-    print(f"🔍 Callback data: {callback.data}")
-    print(f"🔍 From user: {callback.from_user.id}")
-    
-    try:
-        interest_id = int(callback.data.split("_")[2])
-        print(f"🔍 Выбран интерес ID: {interest_id}")
-        
-        data = await state.get_data()
-        print(f"🔍 Текущие данные state: {data}")
-        
-        selected = data.get('selected_interests', [])
-        print(f"🔍 Текущие выбранные: {selected}")
-        
-        if interest_id in selected:
-            selected.remove(interest_id)
-            print(f"❌ Интерес {interest_id} удален")
-        else:
-            selected.append(interest_id)
-            print(f"✅ Интерес {interest_id} добавлен")
-        
-        await state.update_data(selected_interests=selected)
-        print(f"🔍 Новые выбранные: {selected}")
-        
-        # Обновляем клавиатуру
-        from database.requests import get_all_interests
-        from handlers.interests import get_interests_keyboard, format_interests_text
-        
-        interests = await get_all_interests()
-        keyboard = await get_interests_keyboard(interests, selected, "reg_interest")
-        selected_text = format_interests_text(selected, interests)
-        
-        await callback.message.edit_text(
-            f"🌸 *Выбери свои интересы*\n\n"
-            f"{selected_text}\n\n"
-            f"👉 Нажимай на интересы, чтобы выбрать\n"
-            f"✅ Минимум 3 интереса",
-            parse_mode="Markdown",
-            reply_markup=keyboard
-        )
-        print("✅ Сообщение обновлено")
-        await callback.answer()
-        
-    except Exception as e:
-        print(f"❌ ОШИБКА в toggle_interest_reg: {e}")
-        import traceback
-        traceback.print_exc()
-        await callback.answer("❌ Ошибка при выборе", show_alert=True)
 
 @router.message(Command("start"))
 async def cmd_start(message: Message, state: FSMContext):
@@ -125,39 +65,17 @@ async def process_age(message: Message, state: FSMContext):
             return
         
         await state.update_data(age=age)
-        await state.set_state(RegistrationStates.waiting_for_district)
-        
-        builder = ReplyKeyboardBuilder()
-        for district in MINSK_DISTRICTS:
-            builder.button(text=district)
-        builder.adjust(2)
+        await state.set_state(RegistrationStates.waiting_for_bio)
         
         await message.answer(
-            "В каком районе Минска ты живёшь или чаще всего бываешь?\n"
-            "Это поможет показывать мероприятия поближе к тебе 🌸",
-            reply_markup=builder.as_markup(resize_keyboard=True)
+            "Класс! А теперь расскажи немного о себе 😊\n"
+            "Например: чем увлекаешься, что ищешь в клубе, может у тебя есть хобби?\n\n"
+            "(Можно пропустить, написав «пропустить»)",
+            reply_markup=ReplyKeyboardBuilder().button(text="🚫 Пропустить").as_markup(resize_keyboard=True)
         )
         
     except ValueError:
         await message.answer("Пожалуйста, введи возраст числом:")
-
-@router.message(RegistrationStates.waiting_for_district)
-async def process_district(message: Message, state: FSMContext):
-    district = message.text.strip()
-    
-    if district not in MINSK_DISTRICTS:
-        await message.answer("Пожалуйста, выбери район из списка 👇")
-        return
-    
-    await state.update_data(district=district)
-    await state.set_state(RegistrationStates.waiting_for_bio)
-    
-    await message.answer(
-        "Класс! А теперь расскажи немного о себе 😊\n"
-        "Например: чем увлекаешься, что ищешь в клубе, может у тебя есть хобби?\n\n"
-        "(Можно пропустить, написав «пропустить»)",
-        reply_markup=ReplyKeyboardBuilder().button(text="🚫 Пропустить").as_markup(resize_keyboard=True)
-    )
 
 @router.message(RegistrationStates.waiting_for_bio)
 async def process_bio(message: Message, state: FSMContext):
@@ -211,94 +129,26 @@ async def process_instagram(message: Message, state: FSMContext):
         instagram = None
     
     await state.update_data(instagram=instagram)
-    await state.set_state(RegistrationStates.waiting_for_interests)
-    await show_interests_selection(message, state)
-
-async def show_interests_selection(message: Message, state: FSMContext):
-    """Показывает интересы с возможностью выбора"""
-    interests = await get_all_interests()
-    data = await state.get_data()
-    selected = data.get('selected_interests', [])
     
-    keyboard = await get_interests_keyboard(interests, selected, "reg_interest")
-    selected_text = format_interests_text(selected, interests)
-    
-    await message.answer(
-        f"🌸 *Выбери свои интересы*\n\n"
-        f"{selected_text}\n\n"
-        f"👉 Нажимай на интересы, чтобы выбрать\n"
-        f"✅ Минимум 3 интереса",
-        parse_mode="Markdown",
-        reply_markup=keyboard
-    )
-
-@router.callback_query(RegistrationStates.waiting_for_interests, F.data.startswith("reg_interest_"))
-async def toggle_interest_reg(callback: CallbackQuery, state: FSMContext):
-    """Выбор/отмена интереса при регистрации"""
-    try:
-        interest_id = int(callback.data.split("_")[2])
-        print(f"🔍 Выбран интерес ID: {interest_id}")
-        
-        data = await state.get_data()
-        selected = data.get('selected_interests', [])
-        
-        if interest_id in selected:
-            selected.remove(interest_id)
-            print(f"❌ Интерес {interest_id} удален")
-        else:
-            selected.append(interest_id)
-            print(f"✅ Интерес {interest_id} добавлен")
-        
-        await state.update_data(selected_interests=selected)
-        
-        # Обновляем клавиатуру
-        interests = await get_all_interests()
-        keyboard = await get_interests_keyboard(interests, selected, "reg_interest")
-        selected_text = format_interests_text(selected, interests)
-        
-        await callback.message.edit_text(
-            f"🌸 *Выбери свои интересы*\n\n"
-            f"{selected_text}\n\n"
-            f"👉 Нажимай на интересы, чтобы выбрать\n"
-            f"✅ Минимум 3 интереса",
-            parse_mode="Markdown",
-            reply_markup=keyboard
-        )
-        await callback.answer()
-    except Exception as e:
-        print(f"❌ Ошибка в toggle_interest_reg: {e}")
-        await callback.answer("❌ Ошибка при выборе", show_alert=True)
-
-@router.callback_query(RegistrationStates.waiting_for_interests, F.data == "interests_save")
-async def interests_save_reg(callback: CallbackQuery, state: FSMContext):
-    """Сохранить выбранные интересы при регистрации"""
-    data = await state.get_data()
-    selected = data.get('selected_interests', [])
-    
-    if len(selected) < 3:
-        await callback.answer("❌ Нужно выбрать минимум 3 интереса!", show_alert=True)
-        return
-    
-    # Получаем все данные пользователя
+    # Сохраняем пользователя (без интересов и района)
     user_data = await state.get_data()
-    user_id = callback.from_user.id
-    username = callback.from_user.username
+    user_id = message.from_user.id
+    username = message.from_user.username
     
     await add_user(
         user_id=user_id,
         username=username,
         name=user_data['name'],
         age=user_data['age'],
-        district=user_data['district'],
+        district="Минск",  # Район по умолчанию
         bio=user_data.get('bio'),
         photo_file_id=user_data.get('photo_file_id'),
         instagram=user_data.get('instagram')
     )
     
-    await add_user_interests(user_id, selected)
     await state.clear()
     
-    await callback.message.edit_text(
+    await message.answer(
         "💗 *Поздравляем! Ты стала частью Minsk Girls Club!*\n\n"
         "Теперь ты можешь:\n"
         "🌸 Находить мероприятия по душе\n"
@@ -308,15 +158,7 @@ async def interests_save_reg(callback: CallbackQuery, state: FSMContext):
         parse_mode="Markdown"
     )
     
-    await show_main_menu(callback.message)
-
-@router.callback_query(RegistrationStates.waiting_for_interests, F.data == "interests_back")
-async def interests_back_reg(callback: CallbackQuery, state: FSMContext):
-    """Назад при регистрации"""
-    await state.set_state(RegistrationStates.waiting_for_instagram)
-    await callback.message.delete()
-    await ask_instagram(callback.message)
-    await callback.answer()
+    await show_main_menu(message)
 
 async def show_main_menu(message: Message):
     """Показывает главное меню"""

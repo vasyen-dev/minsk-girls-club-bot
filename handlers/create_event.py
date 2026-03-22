@@ -1,3 +1,4 @@
+from handlers.categories import EVENT_CATEGORIES, get_categories_keyboard
 from aiogram import Router, F
 from aiogram.types import Message, CallbackQuery
 from aiogram.fsm.context import FSMContext
@@ -112,28 +113,21 @@ async def process_description(message: Message, state: FSMContext):
     await show_categories(message, state)
 
 async def show_categories(message: Message, state: FSMContext):
-    """Показывает категории для выбора"""
+    """Показывает 6 категорий для выбора"""
     print("📋 ПОКАЗЫВАЕМ КАТЕГОРИИ")
-    interests = await get_all_interests()
-    
-    categories = {}
-    for interest in interests:
-        if interest.category not in categories:
-            categories[interest.category] = interest.category
     
     builder = InlineKeyboardBuilder()
-    for category in categories.keys():
+    for category in EVENT_CATEGORIES:
         builder.button(text=category, callback_data=f"cat_{category}")
     
     builder.button(text="◀️ Назад", callback_data="back_to_description")
     builder.button(text="❌ Отмена", callback_data="cancel_create")
-    builder.adjust(1)
+    builder.adjust(2)
     
     await message.answer(
         "Выбери категорию мероприятия:",
         reply_markup=builder.as_markup()
     )
-
 @router.callback_query(CreateEventStates.waiting_for_category, F.data.startswith("cat_"))
 async def process_category(callback: CallbackQuery, state: FSMContext):
     """Получаем категорию"""
