@@ -197,7 +197,7 @@ async def process_photo(message: Message, state: FSMContext):
 
 @router.message(CreateEventStates.waiting_for_photo)
 async def process_photo_skip(message: Message, state: FSMContext):
-    """Пропускаем фото или отменяем"""
+    """Пропускаем фото или отменяем (кнопками)"""
     print("📸 ОБРАБОТКА ФОТО")
     text = message.text.strip() if message.text else ""
     
@@ -210,13 +210,12 @@ async def process_photo_skip(message: Message, state: FSMContext):
         await state.set_state(CreateEventStates.waiting_for_category)
         await show_categories(message, state)
         return
-    
-    if text.lower() == "пропустить":
+    elif text == "⏩ Пропустить":
         await state.update_data(photo_file_id=None)
         await state.set_state(CreateEventStates.waiting_for_location)
         await ask_location(message, state)
     else:
-        await message.answer("Отправь фото или напиши «пропустить» 📸")
+        await message.answer("Отправь фото или нажми кнопку «Пропустить» 📸")
 
 async def ask_location(message: Message, state: FSMContext):
     """Спрашиваем место проведения"""
@@ -415,7 +414,7 @@ async def process_participants(message: Message, state: FSMContext):
 
 @router.message(CreateEventStates.waiting_for_chat_link)
 async def process_chat_link(message: Message, state: FSMContext):
-    """Получаем ссылку на чат"""
+    """Получаем ссылку на чат (с кнопкой пропустить)"""
     print("💬 ПОЛУЧИЛИ ССЫЛКУ НА ЧАТ")
     
     if message.text == "❌ Отмена":
@@ -430,14 +429,14 @@ async def process_chat_link(message: Message, state: FSMContext):
             reply_markup=get_navigation_keyboard(show_back=True, show_cancel=True)
         )
         return
-    elif message.text.lower() == "пропустить":
+    elif message.text == "⏩ Пропустить":
         await state.update_data(chat_link=None, chat_id=None)
     else:
         link = message.text.strip()
         if "t.me/" in link or "telegram.me/" in link or "https://t.me/" in link:
             await state.update_data(chat_link=link, chat_id=None)
         else:
-            await message.answer("❌ Это не похоже на ссылку Telegram. Попробуй ещё раз или напиши «пропустить»:")
+            await message.answer("❌ Это не похоже на ссылку Telegram. Попробуй ещё раз или нажми «Пропустить»:")
             return
     
     await show_preview(message, state)
@@ -591,3 +590,15 @@ async def cancel_create(callback: CallbackQuery, state: FSMContext):
     await state.clear()
     await show_main_menu(callback.message)
     await callback.answer()
+
+# Клавиатура с кнопками назад, отмена и пропустить
+def get_navigation_skip_keyboard(show_back=True, show_cancel=True, show_skip=True):
+    builder = ReplyKeyboardBuilder()
+    if show_back:
+        builder.button(text="◀️ Назад")
+    if show_skip:
+        builder.button(text="⏩ Пропустить")
+    if show_cancel:
+        builder.button(text="❌ Отмена")
+    builder.adjust(2)
+    return builder.as_markup(resize_keyboard=True)

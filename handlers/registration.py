@@ -6,7 +6,6 @@ from aiogram.fsm.state import State, StatesGroup
 from aiogram.utils.keyboard import InlineKeyboardBuilder, ReplyKeyboardBuilder
 
 from database.requests import add_user, user_exists
-from handlers.categories import EVENT_CATEGORIES
 
 router = Router()
 
@@ -19,6 +18,20 @@ class RegistrationStates(StatesGroup):
 
 def check_age(age: int) -> bool:
     return 18 <= age <= 29
+
+# Клавиатура для пропуска
+def get_skip_keyboard():
+    builder = ReplyKeyboardBuilder()
+    builder.button(text="⏩ Пропустить")
+    builder.button(text="❌ Отмена")
+    builder.adjust(2)
+    return builder.as_markup(resize_keyboard=True)
+
+# Клавиатура для выхода (без пропуска)
+def get_cancel_keyboard():
+    builder = ReplyKeyboardBuilder()
+    builder.button(text="❌ Отмена")
+    return builder.as_markup(resize_keyboard=True)
 
 @router.message(Command("start"))
 async def cmd_start(message: Message, state: FSMContext):
@@ -33,12 +46,18 @@ async def cmd_start(message: Message, state: FSMContext):
         "🌸 Привет! Это *Minsk Girls Club* — клуб для своих\n\n"
         "Давай познакомимся! Как тебя зовут?\n"
         "(Можно имя или ник, как тебе комфортно)",
-        parse_mode="Markdown"
+        parse_mode="Markdown",
+        reply_markup=get_cancel_keyboard()
     )
 
 @router.message(RegistrationStates.waiting_for_name)
 async def process_name(message: Message, state: FSMContext):
     name = message.text.strip()
+    
+    if name == "❌ Отмена":
+        await state.clear()
+        await message.answer("❌ Регистрация отменена", reply_markup=None)
+        return
     
     if len(name) < 2 or len(name) > 50:
         await message.answer("Имя должно быть от 2 до 50 символов. Попробуй ещё раз:")
@@ -49,11 +68,17 @@ async def process_name(message: Message, state: FSMContext):
     
     await message.answer(
         f"Приятно познакомиться, {name} 💗\n\n"
-        "Сколько тебе лет?"
+        "Сколько тебе лет?",
+        reply_markup=get_cancel_keyboard()
     )
 
 @router.message(RegistrationStates.waiting_for_age)
 async def process_age(message: Message, state: FSMContext):
+    if message.text == "❌ Отмена":
+        await state.clear()
+        await message.answer("❌ Регистрация отменена", reply_markup=None)
+        return
+    
     try:
         age = int(message.text.strip())
         
@@ -69,9 +94,8 @@ async def process_age(message: Message, state: FSMContext):
         
         await message.answer(
             "Класс! А теперь расскажи немного о себе 😊\n"
-            "Например: чем увлекаешься, что ищешь в клубе, может у тебя есть хобби?\n\n"
-            "(Можно пропустить, написав «пропустить»)",
-            reply_markup=ReplyKeyboardBuilder().button(text="🚫 Пропустить").as_markup(resize_keyboard=True)
+            "Например: чем увлекаешься, что ищешь в клубе, может у тебя есть хобби?",
+            reply_markup=get_skip_keyboard()
         )
         
     except ValueError:
@@ -79,12 +103,17 @@ async def process_age(message: Message, state: FSMContext):
 
 @router.message(RegistrationStates.waiting_for_bio)
 async def process_bio(message: Message, state: FSMContext):
-    bio = message.text.strip()
+    text = message.text.strip()
     
-    if bio.lower() == "пропустить":
+    if text == "❌ Отмена":
+        await state.clear()
+        await message.answer("❌ Регистрация отменена", reply_markup=None)
+        return
+    elif text == "⏩ Пропустить":
         bio = None
         await message.answer("Окей, расскажешь потом 👌", reply_markup=None)
     else:
+        bio = text
         await message.answer("Интересно! Запомнила 💫", reply_markup=None)
     
     await state.update_data(bio=bio)
@@ -92,8 +121,8 @@ async def process_bio(message: Message, state: FSMContext):
     
     await message.answer(
         "Загрузи своё фото 📸\n"
-        "Так девочкам будет приятнее общаться и легче узнать тебя на встречах\n\n"
-        "(Можно пропустить)"
+        "Так девочкам будет приятнее общаться и легче узнать тебя на встречах",
+        reply_markup=get_skip_keyboard()
     )
 
 @router.message(RegistrationStates.waiting_for_photo, F.photo)
@@ -107,30 +136,44 @@ async def process_photo(message: Message, state: FSMContext):
 
 @router.message(RegistrationStates.waiting_for_photo)
 async def process_photo_skip(message: Message, state: FSMContext):
-    if message.text and message.text.lower() == "пропустить":
+    text = message.text.strip() if message.text else ""
+    
+    if text == "❌ Отмена":
+        await state.clear()
+        await message.answer("❌ Регистрация отменена", reply_markup=None)
+        return
+    elif text == "⏩ Пропустить":
         await state.update_data(photo_file_id=None)
         await state.set_state(RegistrationStates.waiting_for_instagram)
         await ask_instagram(message)
     else:
-        await message.answer("Отправь фото или напиши «пропустить» 📸")
+        await message.answer("Отправь фото или нажми «Пропустить» 📸")
 
 async def ask_instagram(message: Message):
     await message.answer(
         "Оставь свой Instagram, если хочешь ✨\n"
-        "Организаторы мероприятий смогут легко связаться с тобой\n\n"
-        "(Напиши ник или «пропустить»)"
+        "Организаторы мероприятий смогут легко связаться с тобой",
+        reply_markup=get_skip_keyboard()
     )
 
 @router.message(RegistrationStates.waiting_for_instagram)
 async def process_instagram(message: Message, state: FSMContext):
-    instagram = message.text.strip()
+    text = message.text.strip()
     
-    if instagram.lower() == "пропустить":
+    if text == "❌ Отмена":
+        await state.clear()
+        await message.answer("❌ Регистрация отменена", reply_markup=None)
+        return
+    elif text == "⏩ Пропустить":
         instagram = None
+        await message.answer("Окей, можно будет добавить позже ✨", reply_markup=None)
+    else:
+        instagram = text
+        await message.answer("Спасибо! 💗", reply_markup=None)
     
     await state.update_data(instagram=instagram)
     
-    # Сохраняем пользователя (без интересов и района)
+    # Сохраняем пользователя
     user_data = await state.get_data()
     user_id = message.from_user.id
     username = message.from_user.username
@@ -140,7 +183,7 @@ async def process_instagram(message: Message, state: FSMContext):
         username=username,
         name=user_data['name'],
         age=user_data['age'],
-        district="Минск",  # Район по умолчанию
+        district="Минск",
         bio=user_data.get('bio'),
         photo_file_id=user_data.get('photo_file_id'),
         instagram=user_data.get('instagram')
