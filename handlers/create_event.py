@@ -1,4 +1,3 @@
-from handlers.categories import EVENT_CATEGORIES, get_categories_keyboard
 from aiogram import Router, F
 from aiogram.types import Message, CallbackQuery
 from aiogram.fsm.context import FSMContext
@@ -8,6 +7,7 @@ from datetime import datetime
 
 from database.requests import get_user, get_all_interests, add_event
 from handlers.registration import show_main_menu
+from handlers.categories import EVENT_CATEGORIES
 
 router = Router()
 
@@ -22,7 +22,7 @@ class CreateEventStates(StatesGroup):
     waiting_for_participants = State()
     waiting_for_chat_link = State()
 
-# Клавиатура с кнопками назад и отмена
+# Клавиатура с кнопками назад и отмена (всегда видима)
 def get_navigation_keyboard(show_back=True, show_cancel=True):
     builder = ReplyKeyboardBuilder()
     if show_back:
@@ -47,8 +47,7 @@ async def cmd_create_event(message: Message, state: FSMContext):
     await message.answer(
         "🌸 *Создание новой встречи*\n\n"
         "Давай придумаем название! Как назовём мероприятие?\n"
-        "(Например: «Йога в парке», «Девичник в бане», «Мастер-класс по макияжу»)\n\n"
-        "👇 Используй кнопки внизу для навигации",
+        "(Например: «Йога в парке», «Девичник в бане», «Мастер-класс по макияжу»)",
         parse_mode="Markdown",
         reply_markup=get_navigation_keyboard(show_back=False, show_cancel=True)
     )
@@ -76,16 +75,14 @@ async def process_title(message: Message, state: FSMContext):
     await message.answer(
         f"Отлично! Название: *{title}*\n\n"
         "Теперь напиши описание мероприятия 📝\n"
-        "Расскажи, чем будем заниматься, что брать с собой, какие особенности\n\n"
-        "(Можно пропустить, написав «пропустить»)\n"
-        "Используй кнопки для навигации",
+        "Расскажи, чем будем заниматься, что брать с собой, какие особенности",
         parse_mode="Markdown",
         reply_markup=get_navigation_keyboard(show_back=True, show_cancel=True)
     )
 
 @router.message(CreateEventStates.waiting_for_description)
 async def process_description(message: Message, state: FSMContext):
-    """Получаем описание"""
+    """Получаем описание (обязательно)"""
     print("📝 ПОЛУЧИЛИ ОПИСАНИЕ")
     
     if message.text == "❌ Отмена":
@@ -103,13 +100,18 @@ async def process_description(message: Message, state: FSMContext):
     
     description = message.text.strip()
     
-    if description.lower() == "пропустить":
-        description = None
-        await message.answer("Окей, оставим описание пустым")
+    if len(description) < 10:
+        await message.answer("Описание должно быть не менее 10 символов. Расскажи подробнее о встрече:")
+        return
+    
+    if len(description) > 1000:
+        await message.answer("Описание слишком длинное (максимум 1000 символов). Сократи, пожалуйста:")
+        return
     
     await state.update_data(description=description)
     await state.set_state(CreateEventStates.waiting_for_category)
     
+    # Показываем категории для выбора (без дублирующих кнопок внизу)
     await show_categories(message, state)
 
 async def show_categories(message: Message, state: FSMContext):
@@ -128,11 +130,12 @@ async def show_categories(message: Message, state: FSMContext):
         "Выбери категорию мероприятия:",
         reply_markup=builder.as_markup()
     )
+
 @router.callback_query(CreateEventStates.waiting_for_category, F.data.startswith("cat_"))
 async def process_category(callback: CallbackQuery, state: FSMContext):
     """Получаем категорию"""
     print("📋 ПОЛУЧИЛИ КАТЕГОРИЮ")
-    category = callback.data[4:]
+    category = callback.data[4:]  # убираем "cat_"
     print(f"Категория: {category}")
     
     await state.update_data(category=category)
@@ -142,8 +145,7 @@ async def process_category(callback: CallbackQuery, state: FSMContext):
         f"Категория: *{category}*\n\n"
         "Теперь загрузи фото для мероприятия 📸\n"
         "Это поможет привлечь больше участниц\n\n"
-        "(Можно пропустить, написав «пропустить»)\n"
-        "Используй кнопки для навигации"
+        "(Можно пропустить, написав «пропустить»)"
     )
     
     await callback.message.answer(
@@ -156,7 +158,7 @@ async def process_category(callback: CallbackQuery, state: FSMContext):
 async def back_to_description(callback: CallbackQuery, state: FSMContext):
     """Вернуться к описанию"""
     await state.set_state(CreateEventStates.waiting_for_description)
-    await callback.message.edit_text("👆 Возвращаемся к описанию...")
+    await callback.message.delete()
     await callback.message.answer(
         "📝 Напиши описание заново:",
         reply_markup=get_navigation_keyboard(show_back=True, show_cancel=True)
@@ -503,7 +505,7 @@ async def confirm_event(callback: CallbackQuery, state: FSMContext):
         return
     
     user_id = callback.from_user.id
-    data['district'] = "Не указан"
+    data['district'] = "Минск"  # Район по умолчанию
     
     try:
         event_id = await add_event(
@@ -526,7 +528,6 @@ async def confirm_event(callback: CallbackQuery, state: FSMContext):
         
         await state.clear()
         
-        # После успешного создания показываем главное меню
         if callback.message.text:
             await callback.message.edit_text(
                 f"✅ *Мероприятие создано!*\n\n"
@@ -543,7 +544,6 @@ async def confirm_event(callback: CallbackQuery, state: FSMContext):
                 parse_mode="Markdown"
             )
         
-        # Показываем главное меню
         await show_main_menu(callback.message)
         
     except Exception as e:
