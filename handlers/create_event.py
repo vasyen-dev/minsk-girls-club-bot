@@ -22,13 +22,22 @@ class CreateEventStates(StatesGroup):
     waiting_for_participants = State()
     waiting_for_chat_link = State()
 
-# Клавиатура с кнопками назад и отмена (всегда видима)
+# Клавиатура с кнопками назад и отмена
 def get_navigation_keyboard(show_back=True, show_cancel=True):
     builder = ReplyKeyboardBuilder()
     if show_back:
         builder.button(text="◀️ Назад")
     if show_cancel:
         builder.button(text="❌ Отмена")
+    builder.adjust(2)
+    return builder.as_markup(resize_keyboard=True)
+
+# Клавиатура для шагов с пропуском (назад + пропустить + отмена)
+def get_skip_keyboard():
+    builder = ReplyKeyboardBuilder()
+    builder.button(text="◀️ Назад")
+    builder.button(text="⏩ Пропустить")
+    builder.button(text="❌ Отмена")
     builder.adjust(2)
     return builder.as_markup(resize_keyboard=True)
 
@@ -111,7 +120,7 @@ async def process_description(message: Message, state: FSMContext):
     await state.update_data(description=description)
     await state.set_state(CreateEventStates.waiting_for_category)
     
-    # Показываем категории для выбора (без дублирующих кнопок внизу)
+    # Показываем категории для выбора
     await show_categories(message, state)
 
 async def show_categories(message: Message, state: FSMContext):
@@ -145,12 +154,12 @@ async def process_category(callback: CallbackQuery, state: FSMContext):
         f"Категория: *{category}*\n\n"
         "Теперь загрузи фото для мероприятия 📸\n"
         "Это поможет привлечь больше участниц\n\n"
-        "(Можно пропустить, написав «пропустить»)"
+        "(Можно пропустить, нажав кнопку ниже)"
     )
     
     await callback.message.answer(
         "👇 Выбери действие:",
-        reply_markup=get_navigation_keyboard(show_back=True, show_cancel=True)
+        reply_markup=get_skip_keyboard()
     )
     await callback.answer()
 
@@ -240,7 +249,7 @@ async def process_location(message: Message, state: FSMContext):
         await state.set_state(CreateEventStates.waiting_for_photo)
         await message.answer(
             "📸 Загрузи фото заново:",
-            reply_markup=get_navigation_keyboard(show_back=True, show_cancel=True)
+            reply_markup=get_skip_keyboard()
         )
         return
     
@@ -270,7 +279,7 @@ async def process_address(message: Message, state: FSMContext):
         await state.set_state(CreateEventStates.waiting_for_photo)
         await message.answer(
             "📸 Загрузи фото заново:",
-            reply_markup=get_navigation_keyboard(show_back=True, show_cancel=True)
+            reply_markup=get_skip_keyboard()
         )
         return
     
@@ -403,10 +412,10 @@ async def process_participants(message: Message, state: FSMContext):
             "💬 *Чат мероприятия*\n\n"
             "Если хочешь создать чат для участниц, сделай это сейчас:\n\n"
             "1️⃣ Создай чат в Telegram\n"
-            "2️⃣ Пришли сюда ссылку на чат (или напиши «пропустить»)\n\n"
+            "2️⃣ Пришли сюда ссылку на чат (или нажми «Пропустить»)\n\n"
             "Это поможет участницам общаться до встречи!",
             parse_mode="Markdown",
-            reply_markup=get_navigation_keyboard(show_back=True, show_cancel=True)
+            reply_markup=get_skip_keyboard()
         )
         
     except ValueError:
@@ -590,15 +599,3 @@ async def cancel_create(callback: CallbackQuery, state: FSMContext):
     await state.clear()
     await show_main_menu(callback.message)
     await callback.answer()
-
-# Клавиатура с кнопками назад, отмена и пропустить
-def get_navigation_skip_keyboard(show_back=True, show_cancel=True, show_skip=True):
-    builder = ReplyKeyboardBuilder()
-    if show_back:
-        builder.button(text="◀️ Назад")
-    if show_skip:
-        builder.button(text="⏩ Пропустить")
-    if show_cancel:
-        builder.button(text="❌ Отмена")
-    builder.adjust(2)
-    return builder.as_markup(resize_keyboard=True)

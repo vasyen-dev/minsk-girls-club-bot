@@ -19,18 +19,29 @@ class RegistrationStates(StatesGroup):
 def check_age(age: int) -> bool:
     return 18 <= age <= 29
 
-# Клавиатура для пропуска
-def get_skip_keyboard():
+# Клавиатура для первого шага (только отмена)
+def get_start_keyboard():
     builder = ReplyKeyboardBuilder()
-    builder.button(text="⏩ Пропустить")
     builder.button(text="❌ Отмена")
+    return builder.as_markup(resize_keyboard=True)
+
+# Клавиатура для шагов с навигацией (назад + отмена)
+def get_nav_keyboard(show_back=True, show_cancel=True):
+    builder = ReplyKeyboardBuilder()
+    if show_back:
+        builder.button(text="◀️ Назад")
+    if show_cancel:
+        builder.button(text="❌ Отмена")
     builder.adjust(2)
     return builder.as_markup(resize_keyboard=True)
 
-# Клавиатура для выхода (без пропуска)
-def get_cancel_keyboard():
+# Клавиатура для шагов с пропуском (назад + пропустить + отмена)
+def get_skip_keyboard():
     builder = ReplyKeyboardBuilder()
+    builder.button(text="◀️ Назад")
+    builder.button(text="⏩ Пропустить")
     builder.button(text="❌ Отмена")
+    builder.adjust(2)
     return builder.as_markup(resize_keyboard=True)
 
 @router.message(Command("start"))
@@ -47,7 +58,7 @@ async def cmd_start(message: Message, state: FSMContext):
         "Давай познакомимся! Как тебя зовут?\n"
         "(Можно имя или ник, как тебе комфортно)",
         parse_mode="Markdown",
-        reply_markup=get_cancel_keyboard()
+        reply_markup=get_start_keyboard()
     )
 
 @router.message(RegistrationStates.waiting_for_name)
@@ -69,7 +80,7 @@ async def process_name(message: Message, state: FSMContext):
     await message.answer(
         f"Приятно познакомиться, {name} 💗\n\n"
         "Сколько тебе лет?",
-        reply_markup=get_cancel_keyboard()
+        reply_markup=get_nav_keyboard(show_back=False, show_cancel=True)
     )
 
 @router.message(RegistrationStates.waiting_for_age)
@@ -95,7 +106,7 @@ async def process_age(message: Message, state: FSMContext):
         await message.answer(
             "Класс! А теперь расскажи немного о себе 😊\n"
             "Например: чем увлекаешься, что ищешь в клубе, может у тебя есть хобби?",
-            reply_markup=get_skip_keyboard()
+            reply_markup=get_nav_keyboard(show_back=True, show_cancel=True)
         )
         
     except ValueError:
@@ -109,14 +120,15 @@ async def process_bio(message: Message, state: FSMContext):
         await state.clear()
         await message.answer("❌ Регистрация отменена", reply_markup=None)
         return
-    elif text == "⏩ Пропустить":
-        bio = None
-        await message.answer("Окей, расскажешь потом 👌", reply_markup=None)
-    else:
-        bio = text
-        await message.answer("Интересно! Запомнила 💫", reply_markup=None)
+    elif text == "◀️ Назад":
+        await state.set_state(RegistrationStates.waiting_for_age)
+        await message.answer(
+            "🎂 Введи свой возраст:",
+            reply_markup=get_nav_keyboard(show_back=False, show_cancel=True)
+        )
+        return
     
-    await state.update_data(bio=bio)
+    await state.update_data(bio=text)
     await state.set_state(RegistrationStates.waiting_for_photo)
     
     await message.answer(
@@ -142,12 +154,19 @@ async def process_photo_skip(message: Message, state: FSMContext):
         await state.clear()
         await message.answer("❌ Регистрация отменена", reply_markup=None)
         return
+    elif text == "◀️ Назад":
+        await state.set_state(RegistrationStates.waiting_for_bio)
+        await message.answer(
+            "📝 Напиши немного о себе:",
+            reply_markup=get_nav_keyboard(show_back=True, show_cancel=True)
+        )
+        return
     elif text == "⏩ Пропустить":
         await state.update_data(photo_file_id=None)
         await state.set_state(RegistrationStates.waiting_for_instagram)
         await ask_instagram(message)
     else:
-        await message.answer("Отправь фото или нажми «Пропустить» 📸")
+        await message.answer("Отправь фото или нажми кнопку «Пропустить» 📸")
 
 async def ask_instagram(message: Message):
     await message.answer(
@@ -163,6 +182,13 @@ async def process_instagram(message: Message, state: FSMContext):
     if text == "❌ Отмена":
         await state.clear()
         await message.answer("❌ Регистрация отменена", reply_markup=None)
+        return
+    elif text == "◀️ Назад":
+        await state.set_state(RegistrationStates.waiting_for_photo)
+        await message.answer(
+            "📸 Загрузи своё фото:",
+            reply_markup=get_skip_keyboard()
+        )
         return
     elif text == "⏩ Пропустить":
         instagram = None
