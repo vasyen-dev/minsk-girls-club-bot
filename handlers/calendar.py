@@ -1,40 +1,67 @@
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from datetime import datetime, timedelta
 
-def create_date_time_keyboard():
-    """Создает клавиатуру с готовыми вариантами дат"""
+def create_calendar(year: int = None, month: int = None):
+    """Создает календарь для выбора даты"""
     now = datetime.now()
+    if year is None:
+        year = now.year
+    if month is None:
+        month = now.month
     
-    dates = [
-        (now + timedelta(days=1), "Завтра"),
-        (now + timedelta(days=2), "Послезавтра"),
-        (now + timedelta(days=3), f"{now.strftime('%d.%m')}"),
-        (now + timedelta(days=4), f"{now.strftime('%d.%m')}"),
-        (now + timedelta(days=5), f"{now.strftime('%d.%m')}"),
-        (now + timedelta(days=6), f"{now.strftime('%d.%m')}"),
-        (now + timedelta(days=7), "Через неделю"),
+    month_names = [
+        "Январь", "Февраль", "Март", "Апрель", "Май", "Июнь",
+        "Июль", "Август", "Сентябрь", "Октябрь", "Ноябрь", "Декабрь"
     ]
     
     builder = []
     
-    for date, label in dates:
-        day = date.strftime('%d.%m')
-        if label == "Завтра":
-            day_label = f"📅 Завтра ({day})"
-        elif label == "Послезавтра":
-            day_label = f"📅 Послезавтра ({day})"
-        elif label == "Через неделю":
-            day_label = f"📅 Через неделю ({day})"
-        else:
-            day_label = f"📅 {day}"
-        
-        builder.append([
-            InlineKeyboardButton(text=day_label, callback_data=f"date_{date.year}_{date.month}_{date.day}")
-        ])
-    
+    # Заголовок: месяц и год
     builder.append([
-        InlineKeyboardButton(text="✏️ Ввести вручную", callback_data="manual_date")
+        InlineKeyboardButton(text="◀️", callback_data=f"cal_prev_{year}_{month}"),
+        InlineKeyboardButton(text=f"{month_names[month-1]} {year}", callback_data="ignore"),
+        InlineKeyboardButton(text="▶️", callback_data=f"cal_next_{year}_{month}")
     ])
+    
+    # Дни недели
+    week_days = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"]
+    row = []
+    for day in week_days:
+        row.append(InlineKeyboardButton(text=day, callback_data="ignore"))
+    builder.append(row)
+    
+    # Первый день месяца
+    first_day = datetime(year, month, 1)
+    start_weekday = first_day.weekday()  # 0 = понедельник
+    
+    # Количество дней в месяце
+    if month == 12:
+        next_month = datetime(year + 1, 1, 1)
+    else:
+        next_month = datetime(year, month + 1, 1)
+    days_in_month = (next_month - first_day).days
+    
+    row = []
+    # Пустые ячейки до первого дня
+    for _ in range(start_weekday):
+        row.append(InlineKeyboardButton(text=" ", callback_data="ignore"))
+    
+    for day in range(1, days_in_month + 1):
+        date = datetime(year, month, day)
+        # Не показываем прошедшие даты
+        if date.date() >= datetime.now().date():
+            row.append(InlineKeyboardButton(text=str(day), callback_data=f"date_{year}_{month}_{day}"))
+        else:
+            row.append(InlineKeyboardButton(text=str(day), callback_data="ignore"))
+        
+        if len(row) == 7:
+            builder.append(row)
+            row = []
+    
+    if row:
+        while len(row) < 7:
+            row.append(InlineKeyboardButton(text=" ", callback_data="ignore"))
+        builder.append(row)
     
     builder.append([
         InlineKeyboardButton(text="❌ Отмена", callback_data="cancel_date")
@@ -42,30 +69,37 @@ def create_date_time_keyboard():
     
     return InlineKeyboardMarkup(inline_keyboard=builder)
 
-def create_time_keyboard_for_date(selected_date):
-    """Создает клавиатуру с вариантами времени для выбранной даты"""
-    # Варианты времени с шагом 30 минут
-    times = [
-        "10:00", "10:30", "11:00", "11:30",
-        "12:00", "12:30", "13:00", "13:30",
-        "14:00", "14:30", "15:00", "15:30",
-        "16:00", "16:30", "17:00", "17:30",
-        "18:00", "18:30", "19:00", "19:30",
-        "20:00", "20:30", "21:00"
-    ]
-    
+def create_hour_keyboard():
+    """Создает клавиатуру для выбора часа (с 10 до 21)"""
     builder = []
     row = []
-    for time in times:
-        row.append(InlineKeyboardButton(text=f"🕒 {time}", callback_data=f"time_{time}"))
-        if len(row) == 3:
+    for hour in range(10, 22):
+        row.append(InlineKeyboardButton(text=f"{hour:02d}:00", callback_data=f"hour_{hour}"))
+        if len(row) == 4:
             builder.append(row)
             row = []
     if row:
         builder.append(row)
     
     builder.append([
-        InlineKeyboardButton(text="◀️ Назад", callback_data="back_to_dates"),
+        InlineKeyboardButton(text="◀️ Назад", callback_data="back_to_calendar"),
+        InlineKeyboardButton(text="❌ Отмена", callback_data="cancel_date")
+    ])
+    
+    return InlineKeyboardMarkup(inline_keyboard=builder)
+
+def create_minute_keyboard(hour):
+    """Создает клавиатуру для выбора минут (00, 15, 30, 45)"""
+    minutes = ["00", "15", "30", "45"]
+    
+    builder = []
+    row = []
+    for minute in minutes:
+        row.append(InlineKeyboardButton(text=f"{minute}", callback_data=f"minute_{hour}_{minute}"))
+    builder.append(row)
+    
+    builder.append([
+        InlineKeyboardButton(text="◀️ Назад", callback_data="back_to_hour"),
         InlineKeyboardButton(text="❌ Отмена", callback_data="cancel_date")
     ])
     
