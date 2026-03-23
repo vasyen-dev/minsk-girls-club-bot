@@ -21,9 +21,8 @@ class CreateEventStates(StatesGroup):
     waiting_for_price = State()
     waiting_for_participants = State()
     waiting_for_chat_link = State()
-    selected_date = State()  # для хранения выбранной даты
+    selected_date = State()
 
-# Клавиатура с кнопками назад и отмена
 def get_navigation_keyboard(show_back=True, show_cancel=True):
     builder = ReplyKeyboardBuilder()
     if show_back:
@@ -33,7 +32,6 @@ def get_navigation_keyboard(show_back=True, show_cancel=True):
     builder.adjust(2)
     return builder.as_markup(resize_keyboard=True)
 
-# Клавиатура для шагов с пропуском (назад + пропустить + отмена)
 def get_skip_keyboard():
     builder = ReplyKeyboardBuilder()
     builder.button(text="◀️ Назад")
@@ -44,8 +42,6 @@ def get_skip_keyboard():
 
 @router.message(F.text == "✨ Создать встречу")
 async def cmd_create_event(message: Message, state: FSMContext):
-    """Начало создания мероприятия"""
-    print("🌸 НАЧАЛО СОЗДАНИЯ МЕРОПРИЯТИЯ")
     user_id = message.from_user.id
     user = await get_user(user_id)
     
@@ -56,17 +52,13 @@ async def cmd_create_event(message: Message, state: FSMContext):
     await state.set_state(CreateEventStates.waiting_for_title)
     await message.answer(
         "🌸 *Создание новой встречи*\n\n"
-        "Давай придумаем название! Как назовём мероприятие?\n"
-        "(Например: «Йога в парке», «Девичник в бане», «Мастер-класс по макияжу»)",
+        "Давай придумаем название! Как назовём мероприятие?",
         parse_mode="Markdown",
         reply_markup=get_navigation_keyboard(show_back=False, show_cancel=True)
     )
 
 @router.message(CreateEventStates.waiting_for_title)
 async def process_title(message: Message, state: FSMContext):
-    """Получаем название"""
-    print("📝 ПОЛУЧИЛИ НАЗВАНИЕ")
-    
     if message.text == "❌ Отмена":
         await state.clear()
         await message.answer("❌ Создание отменено", reply_markup=None)
@@ -74,27 +66,21 @@ async def process_title(message: Message, state: FSMContext):
         return
     
     title = message.text.strip()
-    
     if len(title) < 3 or len(title) > 100:
-        await message.answer("Название должно быть от 3 до 100 символов. Попробуй ещё раз:")
+        await message.answer("Название должно быть от 3 до 100 символов:")
         return
     
     await state.update_data(title=title)
     await state.set_state(CreateEventStates.waiting_for_description)
-    
     await message.answer(
         f"Отлично! Название: *{title}*\n\n"
-        "Теперь напиши описание мероприятия 📝\n"
-        "Расскажи, чем будем заниматься, что брать с собой, какие особенности",
+        "Теперь напиши описание мероприятия 📝",
         parse_mode="Markdown",
         reply_markup=get_navigation_keyboard(show_back=True, show_cancel=True)
     )
 
 @router.message(CreateEventStates.waiting_for_description)
 async def process_description(message: Message, state: FSMContext):
-    """Получаем описание (обязательно)"""
-    print("📝 ПОЛУЧИЛИ ОПИСАНИЕ")
-    
     if message.text == "❌ Отмена":
         await state.clear()
         await message.answer("❌ Создание отменено", reply_markup=None)
@@ -102,94 +88,63 @@ async def process_description(message: Message, state: FSMContext):
         return
     elif message.text == "◀️ Назад":
         await state.set_state(CreateEventStates.waiting_for_title)
-        await message.answer(
-            "🌸 Введи название заново:",
-            reply_markup=get_navigation_keyboard(show_back=False, show_cancel=True)
-        )
+        await message.answer("🌸 Введи название:", reply_markup=get_navigation_keyboard(show_back=False, show_cancel=True))
         return
     
     description = message.text.strip()
-    
     if len(description) < 10:
-        await message.answer("Описание должно быть не менее 10 символов. Расскажи подробнее о встрече:")
+        await message.answer("Описание должно быть не менее 10 символов:")
         return
-    
     if len(description) > 1000:
-        await message.answer("Описание слишком длинное (максимум 1000 символов). Сократи, пожалуйста:")
+        await message.answer("Описание слишком длинное (максимум 1000 символов):")
         return
     
     await state.update_data(description=description)
     await state.set_state(CreateEventStates.waiting_for_category)
-    
-    # Показываем категории для выбора
     await show_categories(message, state)
 
 async def show_categories(message: Message, state: FSMContext):
-    """Показывает 6 категорий для выбора"""
-    print("📋 ПОКАЗЫВАЕМ КАТЕГОРИИ")
-    
     from handlers.categories import EVENT_CATEGORIES
     
     builder = InlineKeyboardBuilder()
     for category in EVENT_CATEGORIES:
         builder.button(text=category, callback_data=f"cat_{category}")
-    
     builder.button(text="◀️ Назад", callback_data="back_to_description")
     builder.button(text="❌ Отмена", callback_data="cancel_create")
     builder.adjust(2)
     
-    await message.answer(
-        "Выбери категорию мероприятия:",
-        reply_markup=builder.as_markup()
-    )
+    await message.answer("Выбери категорию мероприятия:", reply_markup=builder.as_markup())
 
 @router.callback_query(CreateEventStates.waiting_for_category, F.data.startswith("cat_"))
 async def process_category(callback: CallbackQuery, state: FSMContext):
-    """Получаем категорию"""
-    print("📋 ПОЛУЧИЛИ КАТЕГОРИЮ")
-    category = callback.data[4:]  # убираем "cat_"
-    print(f"Категория: {category}")
-    
+    category = callback.data[4:]
     await state.update_data(category=category)
     await state.set_state(CreateEventStates.waiting_for_photo)
     
     await callback.message.edit_text(
         f"Категория: *{category}*\n\n"
-        "Теперь загрузи фото для мероприятия 📸\n"
-        "Это поможет привлечь больше участниц\n\n"
-        "(Можно пропустить, нажав кнопку ниже)"
+        "Теперь загрузи фото 📸\n(можно пропустить)",
+        parse_mode="Markdown"
     )
-    
-    await callback.message.answer(
-        "👇 Выбери действие:",
-        reply_markup=get_skip_keyboard()
-    )
+    await callback.message.answer("👇 Выбери действие:", reply_markup=get_skip_keyboard())
     await callback.answer()
 
 @router.callback_query(F.data == "back_to_description")
 async def back_to_description(callback: CallbackQuery, state: FSMContext):
-    """Вернуться к описанию"""
     await state.set_state(CreateEventStates.waiting_for_description)
     await callback.message.delete()
-    await callback.message.answer(
-        "📝 Напиши описание заново:",
-        reply_markup=get_navigation_keyboard(show_back=True, show_cancel=True)
-    )
+    await callback.message.answer("📝 Напиши описание:", reply_markup=get_navigation_keyboard(show_back=True, show_cancel=True))
     await callback.answer()
 
 @router.callback_query(F.data == "cancel_create")
 async def cancel_create_callback(callback: CallbackQuery, state: FSMContext):
-    """Отмена создания"""
     await state.clear()
-    await callback.message.edit_text("❌ Создание мероприятия отменено")
+    await callback.message.edit_text("❌ Создание отменено")
     await show_main_menu(callback.message)
     await callback.answer()
 
 @router.message(CreateEventStates.waiting_for_photo, F.photo)
 async def process_photo(message: Message, state: FSMContext):
-    """Получаем фото"""
-    print("📸 ПОЛУЧИЛИ ФОТО")
-    
     if message.text == "❌ Отмена":
         await state.clear()
         await message.answer("❌ Создание отменено", reply_markup=None)
@@ -202,15 +157,12 @@ async def process_photo(message: Message, state: FSMContext):
     
     photo_file_id = message.photo[-1].file_id
     await state.update_data(photo_file_id=photo_file_id)
-    
     await message.answer("✅ Фото загружено!")
     await state.set_state(CreateEventStates.waiting_for_location)
     await ask_location(message, state)
 
 @router.message(CreateEventStates.waiting_for_photo)
 async def process_photo_skip(message: Message, state: FSMContext):
-    """Пропускаем фото или отменяем (кнопками)"""
-    print("📸 ОБРАБОТКА ФОТО")
     text = message.text.strip() if message.text else ""
     
     if text == "❌ Отмена":
@@ -227,22 +179,17 @@ async def process_photo_skip(message: Message, state: FSMContext):
         await state.set_state(CreateEventStates.waiting_for_location)
         await ask_location(message, state)
     else:
-        await message.answer("Отправь фото или нажми кнопку «Пропустить» 📸")
+        await message.answer("Отправь фото или нажми «Пропустить»")
 
 async def ask_location(message: Message, state: FSMContext):
-    """Спрашиваем место проведения"""
-    print("📍 СПРАШИВАЕМ МЕСТО")
     await message.answer(
         "📍 Где пройдёт встреча?\n\n"
-        "Ты можешь отправить геолокацию или написать адрес текстом",
+        "Отправь геолокацию или напиши адрес",
         reply_markup=get_navigation_keyboard(show_back=True, show_cancel=True)
     )
 
 @router.message(CreateEventStates.waiting_for_location, F.location)
 async def process_location(message: Message, state: FSMContext):
-    """Получаем геолокацию"""
-    print("📍 ПОЛУЧИЛИ ГЕОЛОКАЦИЮ")
-    
     if message.text == "❌ Отмена":
         await state.clear()
         await message.answer("❌ Создание отменено", reply_markup=None)
@@ -250,29 +197,17 @@ async def process_location(message: Message, state: FSMContext):
         return
     elif message.text == "◀️ Назад":
         await state.set_state(CreateEventStates.waiting_for_photo)
-        await message.answer(
-            "📸 Загрузи фото заново:",
-            reply_markup=get_skip_keyboard()
-        )
+        await message.answer("📸 Загрузи фото:", reply_markup=get_skip_keyboard())
         return
     
     latitude = message.location.latitude
     longitude = message.location.longitude
-    
-    await state.update_data(
-        latitude=str(latitude),
-        longitude=str(longitude),
-        address="📍 По геолокации"
-    )
-    
+    await state.update_data(latitude=str(latitude), longitude=str(longitude), address="📍 По геолокации")
     await state.set_state(CreateEventStates.waiting_for_date)
     await ask_date(message, state)
 
 @router.message(CreateEventStates.waiting_for_location)
 async def process_address(message: Message, state: FSMContext):
-    """Получаем адрес текстом"""
-    print("📍 ПОЛУЧИЛИ АДРЕС")
-    
     if message.text == "❌ Отмена":
         await state.clear()
         await message.answer("❌ Создание отменено", reply_markup=None)
@@ -280,44 +215,29 @@ async def process_address(message: Message, state: FSMContext):
         return
     elif message.text == "◀️ Назад":
         await state.set_state(CreateEventStates.waiting_for_photo)
-        await message.answer(
-            "📸 Загрузи фото заново:",
-            reply_markup=get_skip_keyboard()
-        )
+        await message.answer("📸 Загрузи фото:", reply_markup=get_skip_keyboard())
         return
     
     address = message.text.strip()
-    
-    await state.update_data(
-        address=address,
-        latitude=None,
-        longitude=None
-    )
-    
+    await state.update_data(address=address, latitude=None, longitude=None)
     await state.set_state(CreateEventStates.waiting_for_date)
     await ask_date(message, state)
 
 async def ask_date(message: Message, state: FSMContext):
-    """Спрашиваем дату (готовые варианты)"""
-    print("🕒 СПРАШИВАЕМ ДАТУ")
-    
     await message.answer(
-        "📅 *Выбери дату мероприятия*\n\n"
-        "Доступные варианты:",
+        "📅 *Выбери дату мероприятия*",
         parse_mode="Markdown",
         reply_markup=create_date_time_keyboard()
     )
 
 @router.callback_query(CreateEventStates.waiting_for_date, F.data.startswith("date_"))
 async def process_date_selected(callback: CallbackQuery, state: FSMContext):
-    """Получаем выбранную дату"""
-    print("📅 ПОЛУЧИЛИ ДАТУ")
+    print(f"📅 ПОЛУЧИЛИ ДАТУ: {callback.data}")
     _, year, month, day = callback.data.split("_")
     selected_date = datetime(int(year), int(month), int(day))
     
-    # Проверяем, что дата не в прошлом
     if selected_date.date() < datetime.now().date():
-        await callback.answer("❌ Эта дата уже прошла, выбери другую", show_alert=True)
+        await callback.answer("❌ Эта дата уже прошла", show_alert=True)
         return
     
     await state.update_data(selected_date=selected_date)
@@ -332,44 +252,48 @@ async def process_date_selected(callback: CallbackQuery, state: FSMContext):
 
 @router.callback_query(CreateEventStates.waiting_for_date, F.data.startswith("time_"))
 async def process_time_selected(callback: CallbackQuery, state: FSMContext):
-    """Получаем выбранное время"""
-    print("🕒 ПОЛУЧИЛИ ВРЕМЯ")
-    time_str = callback.data.split("_")[1]
-    hour, minute = map(int, time_str.split(":"))
+    print(f"🕒 ПОЛУЧИЛИ ВРЕМЯ: {callback.data}")
     
-    data = await state.get_data()
-    selected_date = data.get('selected_date')
-    
-    if not selected_date:
-        await callback.answer("❌ Ошибка: дата не выбрана", show_alert=True)
-        return
-    
-    event_date = datetime(
-        selected_date.year,
-        selected_date.month,
-        selected_date.day,
-        hour,
-        minute
-    )
-    
-    if event_date < datetime.now():
-        await callback.answer("❌ Дата и время не могут быть в прошлом!", show_alert=True)
-        return
-    
-    await state.update_data(event_date=event_date)
-    await state.set_state(CreateEventStates.waiting_for_price)
-    
-    await callback.message.edit_text(
-        f"✅ *Выбрано:* {event_date.strftime('%d.%m.%Y %H:%M')}\n\n"
-        f"💰 Теперь введи стоимость участия:",
-        parse_mode="Markdown",
-        reply_markup=get_navigation_keyboard(show_back=True, show_cancel=True)
-    )
-    await callback.answer()
+    try:
+        time_str = callback.data.split("_")[1]
+        hour, minute = map(int, time_str.split(":"))
+        
+        data = await state.get_data()
+        selected_date = data.get('selected_date')
+        
+        if not selected_date:
+            await callback.answer("❌ Ошибка: дата не выбрана", show_alert=True)
+            return
+        
+        event_date = datetime(
+            selected_date.year,
+            selected_date.month,
+            selected_date.day,
+            hour,
+            minute
+        )
+        
+        if event_date < datetime.now():
+            await callback.answer("❌ Дата и время не могут быть в прошлом!", show_alert=True)
+            return
+        
+        await state.update_data(event_date=event_date)
+        await state.set_state(CreateEventStates.waiting_for_price)
+        
+        await callback.message.edit_text(
+            f"✅ *Выбрано:* {event_date.strftime('%d.%m.%Y %H:%M')}\n\n"
+            f"💰 Теперь введи стоимость участия:",
+            parse_mode="Markdown",
+            reply_markup=get_navigation_keyboard(show_back=True, show_cancel=True)
+        )
+        await callback.answer()
+        
+    except Exception as e:
+        print(f"❌ Ошибка в process_time_selected: {e}")
+        await callback.answer("❌ Ошибка при выборе времени", show_alert=True)
 
 @router.callback_query(CreateEventStates.waiting_for_date, F.data == "manual_date")
 async def manual_date_input(callback: CallbackQuery, state: FSMContext):
-    """Ручной ввод даты"""
     await callback.message.edit_text(
         "✏️ Введи дату в формате:\n"
         "`ДД.ММ.ГГГГ`\n\n"
@@ -383,13 +307,12 @@ async def manual_date_input(callback: CallbackQuery, state: FSMContext):
 
 @router.message(CreateEventStates.waiting_for_date)
 async def process_manual_date(message: Message, state: FSMContext):
-    """Обработка ручного ввода даты"""
     try:
         date_str = message.text.strip()
         selected_date = datetime.strptime(date_str, "%d.%m.%Y")
         
         if selected_date.date() < datetime.now().date():
-            await message.answer("❌ Дата не может быть в прошлом! Попробуй ещё раз:")
+            await message.answer("❌ Дата не может быть в прошлом!")
             return
         
         await state.update_data(selected_date=selected_date)
@@ -401,18 +324,12 @@ async def process_manual_date(message: Message, state: FSMContext):
             reply_markup=create_time_keyboard_for_date(selected_date)
         )
     except ValueError:
-        await message.answer(
-            "❌ Неправильный формат! Используй: `ДД.ММ.ГГГГ`\n"
-            "Например: `25.12.2024`",
-            parse_mode="Markdown"
-        )
+        await message.answer("❌ Неправильный формат! Используй: `ДД.ММ.ГГГГ`", parse_mode="Markdown")
 
 @router.callback_query(CreateEventStates.waiting_for_date, F.data == "back_to_dates")
 async def back_to_dates(callback: CallbackQuery, state: FSMContext):
-    """Вернуться к выбору даты"""
     await callback.message.edit_text(
-        "📅 *Выбери дату мероприятия*\n\n"
-        "Доступные варианты:",
+        "📅 *Выбери дату мероприятия*",
         parse_mode="Markdown",
         reply_markup=create_date_time_keyboard()
     )
@@ -420,7 +337,6 @@ async def back_to_dates(callback: CallbackQuery, state: FSMContext):
 
 @router.callback_query(CreateEventStates.waiting_for_date, F.data == "cancel_date")
 async def cancel_date(callback: CallbackQuery, state: FSMContext):
-    """Отмена выбора даты"""
     await state.clear()
     await callback.message.edit_text("❌ Создание мероприятия отменено")
     await show_main_menu(callback.message)
@@ -428,9 +344,6 @@ async def cancel_date(callback: CallbackQuery, state: FSMContext):
 
 @router.message(CreateEventStates.waiting_for_price)
 async def process_price(message: Message, state: FSMContext):
-    """Получаем стоимость"""
-    print("💰 ПОЛУЧИЛИ ЦЕНУ")
-    
     if message.text == "❌ Отмена":
         await state.clear()
         await message.answer("❌ Создание отменено", reply_markup=None)
@@ -442,27 +355,20 @@ async def process_price(message: Message, state: FSMContext):
         return
     
     price = message.text.strip()
-    
     if len(price) > 50:
-        await message.answer("Слишком длинное описание цены. Покороче, пожалуйста:")
+        await message.answer("Слишком длинное описание цены:")
         return
     
     await state.update_data(price=price)
     await state.set_state(CreateEventStates.waiting_for_participants)
-    
     await message.answer(
-        "👥 Сколько человек может участвовать?\n\n"
-        "Напиши число (например: `10`)\n"
-        "Или `0`, если нет ограничений",
-        parse_mode="Markdown",
+        "👥 Сколько человек может участвовать?\n"
+        "Напиши число (0 - без лимита)",
         reply_markup=get_navigation_keyboard(show_back=True, show_cancel=True)
     )
 
 @router.message(CreateEventStates.waiting_for_participants)
 async def process_participants(message: Message, state: FSMContext):
-    """Получаем количество участников"""
-    print("👥 ПОЛУЧИЛИ КОЛИЧЕСТВО УЧАСТНИКОВ")
-    
     if message.text == "❌ Отмена":
         await state.clear()
         await message.answer("❌ Создание отменено", reply_markup=None)
@@ -470,40 +376,28 @@ async def process_participants(message: Message, state: FSMContext):
         return
     elif message.text == "◀️ Назад":
         await state.set_state(CreateEventStates.waiting_for_price)
-        await message.answer(
-            "💰 Введи стоимость заново:",
-            reply_markup=get_navigation_keyboard(show_back=True, show_cancel=True)
-        )
+        await message.answer("💰 Введи стоимость:", reply_markup=get_navigation_keyboard(show_back=True, show_cancel=True))
         return
     
     try:
         max_participants = int(message.text.strip())
-        
         if max_participants < 0:
-            await message.answer("Число должно быть положительным. Попробуй ещё раз:")
+            await message.answer("Число должно быть положительным:")
             return
         
         await state.update_data(max_participants=max_participants)
-        
         await state.set_state(CreateEventStates.waiting_for_chat_link)
         await message.answer(
             "💬 *Чат мероприятия*\n\n"
-            "Если хочешь создать чат для участниц, сделай это сейчас:\n\n"
-            "1️⃣ Создай чат в Telegram\n"
-            "2️⃣ Пришли сюда ссылку на чат (или нажми «Пропустить»)\n\n"
-            "Это поможет участницам общаться до встречи!",
+            "Пришли ссылку на чат (или нажми «Пропустить»)",
             parse_mode="Markdown",
             reply_markup=get_skip_keyboard()
         )
-        
     except ValueError:
-        await message.answer("Введи число (например: 10) или 0 для безлимита:")
+        await message.answer("Введи число:")
 
 @router.message(CreateEventStates.waiting_for_chat_link)
 async def process_chat_link(message: Message, state: FSMContext):
-    """Получаем ссылку на чат (с кнопкой пропустить)"""
-    print("💬 ПОЛУЧИЛИ ССЫЛКУ НА ЧАТ")
-    
     if message.text == "❌ Отмена":
         await state.clear()
         await message.answer("❌ Создание отменено", reply_markup=None)
@@ -511,28 +405,22 @@ async def process_chat_link(message: Message, state: FSMContext):
         return
     elif message.text == "◀️ Назад":
         await state.set_state(CreateEventStates.waiting_for_participants)
-        await message.answer(
-            "👥 Введи количество участников заново:",
-            reply_markup=get_navigation_keyboard(show_back=True, show_cancel=True)
-        )
+        await message.answer("👥 Введи количество участников:", reply_markup=get_navigation_keyboard(show_back=True, show_cancel=True))
         return
     elif message.text == "⏩ Пропустить":
         await state.update_data(chat_link=None, chat_id=None)
     else:
         link = message.text.strip()
-        if "t.me/" in link or "telegram.me/" in link or "https://t.me/" in link:
+        if "t.me/" in link:
             await state.update_data(chat_link=link, chat_id=None)
         else:
-            await message.answer("❌ Это не похоже на ссылку Telegram. Попробуй ещё раз или нажми «Пропустить»:")
+            await message.answer("❌ Это не похоже на ссылку Telegram. Нажми «Пропустить» или введи корректную ссылку:")
             return
     
     await show_preview(message, state)
 
 async def show_preview(message: Message, state: FSMContext):
-    """Показывает превью мероприятия перед сохранением"""
-    print("👀 ПОКАЗЫВАЕМ ПРЕВЬЮ")
     data = await state.get_data()
-    
     event_date_str = data['event_date'].strftime('%d.%m.%Y %H:%M')
     
     preview_text = (
@@ -547,7 +435,7 @@ async def show_preview(message: Message, state: FSMContext):
     )
     
     if data.get('chat_link'):
-        preview_text += f"*Чат:* [Ссылка на чат]({data['chat_link']})\n"
+        preview_text += f"*Чат:* [Ссылка]({data['chat_link']})\n"
     
     preview_text += f"\nВсё верно?"
     
@@ -567,31 +455,23 @@ async def show_preview(message: Message, state: FSMContext):
             reply_markup=builder.as_markup()
         )
     else:
-        await message.answer(
-            preview_text,
-            parse_mode="Markdown",
-            reply_markup=builder.as_markup()
-        )
+        await message.answer(preview_text, parse_mode="Markdown", reply_markup=builder.as_markup())
 
 @router.callback_query(F.data == "confirm_event")
 async def confirm_event(callback: CallbackQuery, state: FSMContext):
-    """Подтверждение и сохранение мероприятия"""
-    print("✅ НАЖАТА КНОПКА 'ОПУБЛИКОВАТЬ'")
-    
     data = await state.get_data()
-    
     if not data:
         if callback.message.text:
-            await callback.message.edit_text("❌ Ошибка: данные не найдены. Начни создание заново.")
+            await callback.message.edit_text("❌ Ошибка: данные не найдены")
         else:
             await callback.message.delete()
-            await callback.message.answer("❌ Ошибка: данные не найдены. Начни создание заново.")
+            await callback.message.answer("❌ Ошибка: данные не найдены")
         await state.clear()
         await callback.answer()
         return
     
     user_id = callback.from_user.id
-    data['district'] = "Минск"  # Район по умолчанию
+    data['district'] = "Минск"
     
     try:
         event_id = await add_event(
@@ -617,63 +497,47 @@ async def confirm_event(callback: CallbackQuery, state: FSMContext):
         if callback.message.text:
             await callback.message.edit_text(
                 f"✅ *Мероприятие создано!*\n\n"
-                f"Оно отправлено на модерацию. Обычно проверка занимает до 2 часов.\n"
-                f"Мы уведомим тебя, когда встреча будет опубликована 🌸",
+                f"Оно отправлено на модерацию. Проверка занимает до 2 часов.",
                 parse_mode="Markdown"
             )
         else:
             await callback.message.delete()
             await callback.message.answer(
                 f"✅ *Мероприятие создано!*\n\n"
-                f"Оно отправлено на модерацию. Обычно проверка занимает до 2 часов.\n"
-                f"Мы уведомим тебя, когда встреча будет опубликована 🌸",
+                f"Оно отправлено на модерацию. Проверка занимает до 2 часов.",
                 parse_mode="Markdown"
             )
         
         await show_main_menu(callback.message)
         
     except Exception as e:
-        print(f"❌ Ошибка при сохранении: {e}")
+        print(f"❌ Ошибка: {e}")
         if callback.message.text:
-            await callback.message.edit_text(f"❌ Ошибка при сохранении: {e}")
+            await callback.message.edit_text(f"❌ Ошибка: {e}")
         else:
             await callback.message.delete()
-            await callback.message.answer(f"❌ Ошибка при сохранении: {e}")
+            await callback.message.answer(f"❌ Ошибка: {e}")
     
     await callback.answer()
 
 @router.callback_query(F.data == "edit_event")
 async def edit_event(callback: CallbackQuery, state: FSMContext):
-    """Редактирование мероприятия"""
-    print("✏️ НАЖАТА КНОПКА 'РЕДАКТИРОВАТЬ'")
-    
     if callback.message.text:
-        await callback.message.edit_text(
-            "✏️ Редактирование\n\n"
-            "Пока эта функция в разработке. Начни создание заново с /start"
-        )
+        await callback.message.edit_text("✏️ Редактирование в разработке")
     else:
         await callback.message.delete()
-        await callback.message.answer(
-            "✏️ Редактирование\n\n"
-            "Пока эта функция в разработке. Начни создание заново с /start"
-        )
-    
+        await callback.message.answer("✏️ Редактирование в разработке")
     await state.clear()
     await show_main_menu(callback.message)
     await callback.answer()
 
 @router.callback_query(F.data == "cancel_create")
 async def cancel_create(callback: CallbackQuery, state: FSMContext):
-    """Отмена создания"""
-    print("❌ НАЖАТА КНОПКА 'ОТМЕНА'")
-    
     if callback.message.text:
-        await callback.message.edit_text("❌ Создание мероприятия отменено")
+        await callback.message.edit_text("❌ Создание отменено")
     else:
         await callback.message.delete()
-        await callback.message.answer("❌ Создание мероприятия отменено")
-    
+        await callback.message.answer("❌ Создание отменено")
     await state.clear()
     await show_main_menu(callback.message)
     await callback.answer()
