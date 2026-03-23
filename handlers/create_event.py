@@ -287,39 +287,50 @@ async def process_hour_selected(callback: CallbackQuery, state: FSMContext):
 async def process_minute_selected(callback: CallbackQuery, state: FSMContext):
     """Получаем выбранные минуты"""
     print(f"⏱️ ПОЛУЧИЛИ МИНУТЫ: {callback.data}")
-    _, hour, minute = callback.data.split("_")
-    hour = int(hour)
-    minute = int(minute)
     
-    data = await state.get_data()
-    selected_date = data.get('selected_date')
-    
-    if not selected_date:
-        await callback.answer("❌ Ошибка: дата не выбрана", show_alert=True)
-        return
-    
-    event_date = datetime(
-        selected_date.year,
-        selected_date.month,
-        selected_date.day,
-        hour,
-        minute
-    )
-    
-    if event_date < datetime.now():
-        await callback.answer("❌ Дата и время не могут быть в прошлом!", show_alert=True)
-        return
-    
-    await state.update_data(event_date=event_date)
-    await state.set_state(CreateEventStates.waiting_for_price)
-    
-    await callback.message.edit_text(
-        f"✅ *Выбрано:* {event_date.strftime('%d.%m.%Y %H:%M')}\n\n"
-        f"💰 Теперь введи стоимость участия:",
-        parse_mode="Markdown",
-        reply_markup=get_navigation_keyboard(show_back=True, show_cancel=True)
-    )
-    await callback.answer()
+    try:
+        # Разбираем callback_data: minute_20_30
+        parts = callback.data.split("_")
+        hour = int(parts[1])
+        minute = int(parts[2])
+        
+        print(f"🕒 Выбранное время: {hour:02d}:{minute:02d}")
+        
+        data = await state.get_data()
+        selected_date = data.get('selected_date')
+        
+        if not selected_date:
+            await callback.answer("❌ Ошибка: дата не выбрана", show_alert=True)
+            return
+        
+        event_date = datetime(
+            selected_date.year,
+            selected_date.month,
+            selected_date.day,
+            hour,
+            minute
+        )
+        
+        print(f"📅 Итоговая дата и время: {event_date}")
+        
+        if event_date < datetime.now():
+            await callback.answer("❌ Дата и время не могут быть в прошлом!", show_alert=True)
+            return
+        
+        await state.update_data(event_date=event_date)
+        await state.set_state(CreateEventStates.waiting_for_price)
+        
+        await callback.message.edit_text(
+            f"✅ *Выбрано:* {event_date.strftime('%d.%m.%Y %H:%M')}\n\n"
+            f"💰 Теперь введи стоимость участия:",
+            parse_mode="Markdown",
+            reply_markup=get_navigation_keyboard(show_back=True, show_cancel=True)
+        )
+        await callback.answer()
+        
+    except Exception as e:
+        print(f"❌ Ошибка в process_minute_selected: {e}")
+        await callback.answer("❌ Ошибка при выборе времени", show_alert=True)
 
 @router.callback_query(CreateEventStates.waiting_for_date, F.data == "back_to_calendar")
 async def back_to_calendar(callback: CallbackQuery, state: FSMContext):
