@@ -59,6 +59,8 @@ async def cmd_create_event(message: Message, state: FSMContext):
 
 @router.message(CreateEventStates.waiting_for_title)
 async def process_title(message: Message, state: FSMContext):
+    print("📝 ПОЛУЧИЛИ НАЗВАНИЕ")
+    
     if message.text == "❌ Отмена":
         await state.clear()
         await message.answer("❌ Создание отменено", reply_markup=None)
@@ -81,6 +83,8 @@ async def process_title(message: Message, state: FSMContext):
 
 @router.message(CreateEventStates.waiting_for_description)
 async def process_description(message: Message, state: FSMContext):
+    print("📝 ПОЛУЧИЛИ ОПИСАНИЕ")
+    
     if message.text == "❌ Отмена":
         await state.clear()
         await message.answer("❌ Создание отменено", reply_markup=None)
@@ -459,6 +463,8 @@ async def show_preview(message: Message, state: FSMContext):
 
 @router.callback_query(F.data == "confirm_event")
 async def confirm_event(callback: CallbackQuery, state: FSMContext):
+    print("✅ НАЖАТА КНОПКА 'ОПУБЛИКОВАТЬ'")
+    
     data = await state.get_data()
     if not data:
         if callback.message.text:
