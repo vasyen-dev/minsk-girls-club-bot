@@ -4,11 +4,10 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.utils.keyboard import InlineKeyboardBuilder, ReplyKeyboardBuilder
 from datetime import datetime
-from handlers.calendar import create_calendar, create_time_keyboard, create_hour_keyboard, create_minute_keyboard
 
 from database.requests import get_user, get_all_interests, add_event
 from handlers.registration import show_main_menu
-from handlers.categories import EVENT_CATEGORIES
+from handlers.calendar import create_calendar, create_time_keyboard
 
 router = Router()
 
@@ -23,7 +22,6 @@ class CreateEventStates(StatesGroup):
     waiting_for_participants = State()
     waiting_for_chat_link = State()
     selected_date = State()  # для хранения выбранной даты
-    selected_hour = State()  # для хранения выбранного часа
 
 # Клавиатура с кнопками назад и отмена
 def get_navigation_keyboard(show_back=True, show_cancel=True):
@@ -129,6 +127,8 @@ async def process_description(message: Message, state: FSMContext):
 async def show_categories(message: Message, state: FSMContext):
     """Показывает 6 категорий для выбора"""
     print("📋 ПОКАЗЫВАЕМ КАТЕГОРИИ")
+    
+    from handlers.categories import EVENT_CATEGORIES
     
     builder = InlineKeyboardBuilder()
     for category in EVENT_CATEGORIES:
@@ -298,7 +298,7 @@ async def process_address(message: Message, state: FSMContext):
     await ask_date(message, state)
 
 async def ask_date(message: Message, state: FSMContext):
-    """Спрашиваем дату и время с календарем"""
+    """Спрашиваем дату с календарем"""
     print("🕒 СПРАШИВАЕМ ДАТУ")
     
     now = datetime.now()
@@ -316,44 +316,21 @@ async def process_date_selected(callback: CallbackQuery, state: FSMContext):
     selected_date = datetime(int(year), int(month), int(day))
     
     await state.update_data(selected_date=selected_date)
-    await state.set_state(CreateEventStates.waiting_for_date)
     
     await callback.message.edit_text(
         f"📅 Выбрана дата: {selected_date.strftime('%d.%m.%Y')}\n\n"
-        f"🕒 Теперь выбери время:",
+        f"🕒 *Выбери время*",
+        parse_mode="Markdown",
         reply_markup=create_time_keyboard()
     )
     await callback.answer()
 
-@router.callback_query(CreateEventStates.waiting_for_date, F.data == "choose_time")
-async def choose_time_start(callback: CallbackQuery, state: FSMContext):
-    """Начать выбор времени"""
-    await callback.message.edit_text(
-        "🕒 *Выбери время*",
-        parse_mode="Markdown",
-        reply_markup=create_hour_keyboard()
-    )
-    await callback.answer()
-
-@router.callback_query(CreateEventStates.waiting_for_date, F.data.startswith("hour_"))
-async def hour_selected(callback: CallbackQuery, state: FSMContext):
-    """Выбран час"""
-    hour = int(callback.data.split("_")[1])
-    await state.update_data(selected_hour=hour)
-    
-    await callback.message.edit_text(
-        f"🕒 Выбран час: {hour:02d}:__\n\n"
-        f"Выбери минуты:",
-        reply_markup=create_minute_keyboard(hour)
-    )
-    await callback.answer()
-
-@router.callback_query(CreateEventStates.waiting_for_date, F.data.startswith("minute_"))
-async def minute_selected(callback: CallbackQuery, state: FSMContext):
-    """Выбраны минуты"""
-    _, hour, minute = callback.data.split("_")
-    hour = int(hour)
-    minute = int(minute)
+@router.callback_query(CreateEventStates.waiting_for_date, F.data.startswith("time_"))
+async def process_time_selected(callback: CallbackQuery, state: FSMContext):
+    """Получаем выбранное время"""
+    print("🕒 ПОЛУЧИЛИ ВРЕМЯ")
+    time_str = callback.data.split("_")[1]
+    hour, minute = map(int, time_str.split(":"))
     
     data = await state.get_data()
     selected_date = data.get('selected_date')
@@ -378,8 +355,9 @@ async def minute_selected(callback: CallbackQuery, state: FSMContext):
     await state.set_state(CreateEventStates.waiting_for_price)
     
     await callback.message.edit_text(
-        f"✅ Выбрано: {event_date.strftime('%d.%m.%Y %H:%M')}\n\n"
+        f"✅ *Выбрано:* {event_date.strftime('%d.%m.%Y %H:%M')}\n\n"
         f"💰 Теперь введи стоимость участия:",
+        parse_mode="Markdown",
         reply_markup=get_navigation_keyboard(show_back=True, show_cancel=True)
     )
     await callback.answer()
@@ -397,16 +375,6 @@ async def back_to_calendar(callback: CallbackQuery, state: FSMContext):
     )
     await callback.answer()
 
-@router.callback_query(CreateEventStates.waiting_for_date, F.data == "back_to_hour")
-async def back_to_hour(callback: CallbackQuery, state: FSMContext):
-    """Вернуться к выбору часа"""
-    await callback.message.edit_text(
-        "🕒 *Выбери час*",
-        parse_mode="Markdown",
-        reply_markup=create_hour_keyboard()
-    )
-    await callback.answer()
-
 @router.callback_query(CreateEventStates.waiting_for_date, F.data == "cancel_date")
 async def cancel_date(callback: CallbackQuery, state: FSMContext):
     """Отмена выбора даты"""
@@ -415,17 +383,43 @@ async def cancel_date(callback: CallbackQuery, state: FSMContext):
     await show_main_menu(callback.message)
     await callback.answer()
 
-@router.callback_query(CreateEventStates.waiting_for_date, F.data == "back_to_date")
-async def back_to_date(callback: CallbackQuery, state: FSMContext):
-    """Вернуться к выбору даты"""
-    await state.set_state(CreateEventStates.waiting_for_date)
-    data = await state.get_data()
-    selected_date = data.get('selected_date', datetime.now())
+@router.callback_query(CreateEventStates.waiting_for_date, F.data.startswith("cal_prev_"))
+async def calendar_prev(callback: CallbackQuery, state: FSMContext):
+    """Предыдущий месяц"""
+    _, _, year, month = callback.data.split("_")
+    year = int(year)
+    month = int(month)
+    
+    if month == 1:
+        month = 12
+        year -= 1
+    else:
+        month -= 1
     
     await callback.message.edit_text(
         "📅 *Выбери дату мероприятия*",
         parse_mode="Markdown",
-        reply_markup=create_calendar(selected_date.year, selected_date.month)
+        reply_markup=create_calendar(year, month)
+    )
+    await callback.answer()
+
+@router.callback_query(CreateEventStates.waiting_for_date, F.data.startswith("cal_next_"))
+async def calendar_next(callback: CallbackQuery, state: FSMContext):
+    """Следующий месяц"""
+    _, _, year, month = callback.data.split("_")
+    year = int(year)
+    month = int(month)
+    
+    if month == 12:
+        month = 1
+        year += 1
+    else:
+        month += 1
+    
+    await callback.message.edit_text(
+        "📅 *Выбери дату мероприятия*",
+        parse_mode="Markdown",
+        reply_markup=create_calendar(year, month)
     )
     await callback.answer()
 
