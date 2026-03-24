@@ -249,7 +249,7 @@ async def ask_date(message: Message, state: FSMContext):
 @router.callback_query(CreateEventStates.waiting_for_date, F.data.startswith("date_"))
 async def process_date_selected(callback: CallbackQuery, state: FSMContext):
     """Получаем выбранную дату"""
-    print(f"📅 ПОЛУЧИЛИ ДАТУ: {callback.data}")
+    print(f"📅📅📅 ПОЛУЧИЛИ ДАТУ: {callback.data}")
     _, year, month, day = callback.data.split("_")
     selected_date = datetime(int(year), int(month), int(day))
     
@@ -258,6 +258,7 @@ async def process_date_selected(callback: CallbackQuery, state: FSMContext):
         return
     
     await state.update_data(selected_date=selected_date)
+    print(f"✅ ДАТА СОХРАНЕНА: {selected_date}")
     
     await callback.message.edit_text(
         f"📅 *Выбрана дата:* {selected_date.strftime('%d.%m.%Y')}\n\n"
@@ -270,9 +271,11 @@ async def process_date_selected(callback: CallbackQuery, state: FSMContext):
 @router.callback_query(CreateEventStates.waiting_for_date, F.data.startswith("hour_"))
 async def process_hour_selected(callback: CallbackQuery, state: FSMContext):
     """Получаем выбранный час"""
-    print(f"🕒 ПОЛУЧИЛИ ЧАС: {callback.data}")
+    print(f"🕒🕒🕒 ПОЛУЧИЛИ ЧАС: {callback.data}")
     hour = int(callback.data.split("_")[1])
     await state.update_data(selected_hour=hour)
+    
+    print(f"✅ ЧАС СОХРАНЕН: {hour}")
     
     await callback.message.edit_text(
         f"📅 *Дата:* {await get_selected_date_str(state)}\n"
@@ -286,7 +289,7 @@ async def process_hour_selected(callback: CallbackQuery, state: FSMContext):
 @router.callback_query(CreateEventStates.waiting_for_date, F.data.startswith("minute_"))
 async def process_minute_selected(callback: CallbackQuery, state: FSMContext):
     """Получаем выбранные минуты"""
-    print(f"⏱️ ПОЛУЧИЛИ МИНУТЫ: {callback.data}")
+    print(f"⏱️⏱️⏱️ ПОЛУЧИЛИ МИНУТЫ: {callback.data}")
     
     try:
         # Разбираем callback_data: minute_20_30
@@ -294,12 +297,13 @@ async def process_minute_selected(callback: CallbackQuery, state: FSMContext):
         hour = int(parts[1])
         minute = int(parts[2])
         
-        print(f"🕒 Выбранное время: {hour:02d}:{minute:02d}")
+        print(f"🕒 ВЫБРАННОЕ ВРЕМЯ: {hour:02d}:{minute:02d}")
         
         data = await state.get_data()
         selected_date = data.get('selected_date')
         
         if not selected_date:
+            print("❌ ОШИБКА: ДАТА НЕ ВЫБРАНА")
             await callback.answer("❌ Ошибка: дата не выбрана", show_alert=True)
             return
         
@@ -311,14 +315,17 @@ async def process_minute_selected(callback: CallbackQuery, state: FSMContext):
             minute
         )
         
-        print(f"📅 Итоговая дата и время: {event_date}")
+        print(f"📅 ИТОГОВАЯ ДАТА: {event_date}")
         
         if event_date < datetime.now():
+            print("❌ ОШИБКА: ДАТА В ПРОШЛОМ")
             await callback.answer("❌ Дата и время не могут быть в прошлом!", show_alert=True)
             return
         
         await state.update_data(event_date=event_date)
         await state.set_state(CreateEventStates.waiting_for_price)
+        
+        print(f"✅ ВРЕМЯ СОХРАНЕНО, ПЕРЕХОД К ЦЕНЕ")
         
         await callback.message.edit_text(
             f"✅ *Выбрано:* {event_date.strftime('%d.%m.%Y %H:%M')}\n\n"
@@ -329,7 +336,7 @@ async def process_minute_selected(callback: CallbackQuery, state: FSMContext):
         await callback.answer()
         
     except Exception as e:
-        print(f"❌ Ошибка в process_minute_selected: {e}")
+        print(f"❌❌❌ КРИТИЧЕСКАЯ ОШИБКА В process_minute_selected: {e}")
         await callback.answer("❌ Ошибка при выборе времени", show_alert=True)
 
 @router.callback_query(CreateEventStates.waiting_for_date, F.data == "back_to_calendar")
