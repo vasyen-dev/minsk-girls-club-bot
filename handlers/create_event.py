@@ -294,6 +294,8 @@ async def process_minute_selected(callback: CallbackQuery, state: FSMContext):
     try:
         # Разбираем callback_data: minute_20_30
         parts = callback.data.split("_")
+        print(f"Разобранные части: {parts}")  # Должно быть: ['minute', '20', '30']
+        
         hour = int(parts[1])
         minute = int(parts[2])
         
@@ -301,6 +303,8 @@ async def process_minute_selected(callback: CallbackQuery, state: FSMContext):
         
         data = await state.get_data()
         selected_date = data.get('selected_date')
+        
+        print(f"📅 Выбранная дата из state: {selected_date}")
         
         if not selected_date:
             print("❌ ОШИБКА: ДАТА НЕ ВЫБРАНА")
@@ -337,6 +341,8 @@ async def process_minute_selected(callback: CallbackQuery, state: FSMContext):
         
     except Exception as e:
         print(f"❌❌❌ КРИТИЧЕСКАЯ ОШИБКА В process_minute_selected: {e}")
+        import traceback
+        traceback.print_exc()
         await callback.answer("❌ Ошибка при выборе времени", show_alert=True)
 
 @router.callback_query(CreateEventStates.waiting_for_date, F.data == "back_to_calendar")

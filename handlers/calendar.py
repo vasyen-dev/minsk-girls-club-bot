@@ -70,10 +70,10 @@ def create_calendar(year: int = None, month: int = None):
     return InlineKeyboardMarkup(inline_keyboard=builder)
 
 def create_hour_keyboard():
-    """Создает клавиатуру для выбора часа (с 10 до 21)"""
+    """Создает клавиатуру для выбора часа (все 24 часа)"""
     builder = []
     row = []
-    for hour in range(10, 22):
+    for hour in range(0, 24):
         row.append(InlineKeyboardButton(text=f"{hour:02d}:00", callback_data=f"hour_{hour}"))
         if len(row) == 4:
             builder.append(row)
@@ -95,6 +95,7 @@ def create_minute_keyboard(hour):
     builder = []
     row = []
     for minute in minutes:
+        # callback_data: minute_20_30 (где 20 - час, 30 - минута)
         row.append(InlineKeyboardButton(text=f"{minute}", callback_data=f"minute_{hour}_{minute}"))
     builder.append(row)
     
