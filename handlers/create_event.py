@@ -331,11 +331,17 @@ async def process_minute_selected(callback: CallbackQuery, state: FSMContext):
         
         print(f"✅ ВРЕМЯ СОХРАНЕНО, ПЕРЕХОД К ЦЕНЕ")
         
+        # Используем InlineKeyboardBuilder для кнопок навигации
+        builder = InlineKeyboardBuilder()
+        builder.button(text="◀️ Назад", callback_data="back_to_date")
+        builder.button(text="❌ Отмена", callback_data="cancel_price")
+        builder.adjust(2)
+        
         await callback.message.edit_text(
             f"✅ *Выбрано:* {event_date.strftime('%d.%m.%Y %H:%M')}\n\n"
             f"💰 Теперь введи стоимость участия:",
             parse_mode="Markdown",
-            reply_markup=get_navigation_keyboard(show_back=True, show_cancel=True)
+            reply_markup=builder.as_markup()
         )
         await callback.answer()
         
@@ -415,6 +421,26 @@ async def cancel_date(callback: CallbackQuery, state: FSMContext):
     await show_main_menu(callback.message)
     await callback.answer()
 
+@router.callback_query(CreateEventStates.waiting_for_price, F.data == "back_to_date")
+async def back_to_date_from_price(callback: CallbackQuery, state: FSMContext):
+    """Вернуться к выбору даты"""
+    await state.set_state(CreateEventStates.waiting_for_date)
+    now = datetime.now()
+    await callback.message.edit_text(
+        "📅 *Выбери дату мероприятия*",
+        parse_mode="Markdown",
+        reply_markup=create_calendar(now.year, now.month)
+    )
+    await callback.answer()
+
+@router.callback_query(CreateEventStates.waiting_for_price, F.data == "cancel_price")
+async def cancel_price(callback: CallbackQuery, state: FSMContext):
+    """Отмена создания"""
+    await state.clear()
+    await callback.message.edit_text("❌ Создание мероприятия отменено")
+    await show_main_menu(callback.message)
+    await callback.answer()
+
 @router.message(CreateEventStates.waiting_for_price)
 async def process_price(message: Message, state: FSMContext):
     if message.text == "❌ Отмена":
@@ -434,11 +460,40 @@ async def process_price(message: Message, state: FSMContext):
     
     await state.update_data(price=price)
     await state.set_state(CreateEventStates.waiting_for_participants)
+    
+    # Используем InlineKeyboardBuilder для кнопок навигации
+    builder = InlineKeyboardBuilder()
+    builder.button(text="◀️ Назад", callback_data="back_to_price")
+    builder.button(text="❌ Отмена", callback_data="cancel_participants")
+    builder.adjust(2)
+    
     await message.answer(
         "👥 Сколько человек может участвовать?\n"
         "Напиши число (0 - без лимита)",
-        reply_markup=get_navigation_keyboard(show_back=True, show_cancel=True)
+        parse_mode="Markdown",
+        reply_markup=builder.as_markup()
     )
+
+@router.callback_query(CreateEventStates.waiting_for_participants, F.data == "back_to_price")
+async def back_to_price(callback: CallbackQuery, state: FSMContext):
+    """Вернуться к вводу цены"""
+    await state.set_state(CreateEventStates.waiting_for_price)
+    await callback.message.edit_text(
+        "💰 Введи стоимость участия:",
+        parse_mode="Markdown",
+        reply_markup=InlineKeyboardBuilder().button(
+            text="❌ Отмена", callback_data="cancel_price"
+        ).as_markup()
+    )
+    await callback.answer()
+
+@router.callback_query(CreateEventStates.waiting_for_participants, F.data == "cancel_participants")
+async def cancel_participants(callback: CallbackQuery, state: FSMContext):
+    """Отмена создания"""
+    await state.clear()
+    await callback.message.edit_text("❌ Создание мероприятия отменено")
+    await show_main_menu(callback.message)
+    await callback.answer()
 
 @router.message(CreateEventStates.waiting_for_participants)
 async def process_participants(message: Message, state: FSMContext):
@@ -449,7 +504,12 @@ async def process_participants(message: Message, state: FSMContext):
         return
     elif message.text == "◀️ Назад":
         await state.set_state(CreateEventStates.waiting_for_price)
-        await message.answer("💰 Введи стоимость:", reply_markup=get_navigation_keyboard(show_back=True, show_cancel=True))
+        await message.answer(
+            "💰 Введи стоимость:",
+            reply_markup=InlineKeyboardBuilder().button(
+                text="❌ Отмена", callback_data="cancel_price"
+            ).as_markup()
+        )
         return
     
     try:
@@ -460,14 +520,49 @@ async def process_participants(message: Message, state: FSMContext):
         
         await state.update_data(max_participants=max_participants)
         await state.set_state(CreateEventStates.waiting_for_chat_link)
+        
+        builder = InlineKeyboardBuilder()
+        builder.button(text="◀️ Назад", callback_data="back_to_participants")
+        builder.button(text="⏩ Пропустить", callback_data="skip_chat_link")
+        builder.button(text="❌ Отмена", callback_data="cancel_chat_link")
+        builder.adjust(2)
+        
         await message.answer(
             "💬 *Чат мероприятия*\n\n"
             "Пришли ссылку на чат (или нажми «Пропустить»)",
             parse_mode="Markdown",
-            reply_markup=get_skip_keyboard()
+            reply_markup=builder.as_markup()
         )
     except ValueError:
         await message.answer("Введи число:")
+
+@router.callback_query(CreateEventStates.waiting_for_chat_link, F.data == "back_to_participants")
+async def back_to_participants(callback: CallbackQuery, state: FSMContext):
+    """Вернуться к выбору количества участников"""
+    await state.set_state(CreateEventStates.waiting_for_participants)
+    await callback.message.edit_text(
+        "👥 Введи количество участников:",
+        parse_mode="Markdown",
+        reply_markup=InlineKeyboardBuilder().button(
+            text="❌ Отмена", callback_data="cancel_participants"
+        ).as_markup()
+    )
+    await callback.answer()
+
+@router.callback_query(CreateEventStates.waiting_for_chat_link, F.data == "skip_chat_link")
+async def skip_chat_link(callback: CallbackQuery, state: FSMContext):
+    """Пропустить добавление ссылки на чат"""
+    await state.update_data(chat_link=None, chat_id=None)
+    await show_preview(callback.message, state)
+    await callback.answer()
+
+@router.callback_query(CreateEventStates.waiting_for_chat_link, F.data == "cancel_chat_link")
+async def cancel_chat_link(callback: CallbackQuery, state: FSMContext):
+    """Отмена создания"""
+    await state.clear()
+    await callback.message.edit_text("❌ Создание мероприятия отменено")
+    await show_main_menu(callback.message)
+    await callback.answer()
 
 @router.message(CreateEventStates.waiting_for_chat_link)
 async def process_chat_link(message: Message, state: FSMContext):
@@ -478,7 +573,12 @@ async def process_chat_link(message: Message, state: FSMContext):
         return
     elif message.text == "◀️ Назад":
         await state.set_state(CreateEventStates.waiting_for_participants)
-        await message.answer("👥 Введи количество участников:", reply_markup=get_navigation_keyboard(show_back=True, show_cancel=True))
+        await message.answer(
+            "👥 Введи количество участников:",
+            reply_markup=InlineKeyboardBuilder().button(
+                text="❌ Отмена", callback_data="cancel_participants"
+            ).as_markup()
+        )
         return
     elif message.text == "⏩ Пропустить":
         await state.update_data(chat_link=None, chat_id=None)
