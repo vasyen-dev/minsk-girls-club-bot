@@ -151,8 +151,15 @@ async def back_to_description(callback: CallbackQuery, state: FSMContext):
 
 @router.callback_query(F.data == "cancel_create")
 async def cancel_create_callback(callback: CallbackQuery, state: FSMContext):
+    """Отмена создания"""
     await state.clear()
-    await callback.message.edit_text("❌ Создание отменено")
+    
+    if callback.message.text:
+        await callback.message.edit_text("❌ Создание отменено")
+    else:
+        await callback.message.delete()
+        await callback.message.answer("❌ Создание отменено")
+    
     await show_main_menu(callback.message)
     await callback.answer()
 
@@ -292,9 +299,8 @@ async def process_minute_selected(callback: CallbackQuery, state: FSMContext):
     print(f"⏱️⏱️⏱️ ПОЛУЧИЛИ МИНУТЫ: {callback.data}")
     
     try:
-        # Разбираем callback_data: minute_20_30
         parts = callback.data.split("_")
-        print(f"Разобранные части: {parts}")  # Должно быть: ['minute', '20', '30']
+        print(f"Разобранные части: {parts}")
         
         hour = int(parts[1])
         minute = int(parts[2])
@@ -331,7 +337,6 @@ async def process_minute_selected(callback: CallbackQuery, state: FSMContext):
         
         print(f"✅ ВРЕМЯ СОХРАНЕНО, ПЕРЕХОД К ЦЕНЕ")
         
-        # Используем InlineKeyboardBuilder для кнопок навигации
         builder = InlineKeyboardBuilder()
         builder.button(text="◀️ Назад", callback_data="back_to_date")
         builder.button(text="❌ Отмена", callback_data="cancel_price")
@@ -417,7 +422,13 @@ async def calendar_next(callback: CallbackQuery, state: FSMContext):
 async def cancel_date(callback: CallbackQuery, state: FSMContext):
     """Отмена выбора даты"""
     await state.clear()
-    await callback.message.edit_text("❌ Создание мероприятия отменено")
+    
+    if callback.message.text:
+        await callback.message.edit_text("❌ Создание мероприятия отменено")
+    else:
+        await callback.message.delete()
+        await callback.message.answer("❌ Создание мероприятия отменено")
+    
     await show_main_menu(callback.message)
     await callback.answer()
 
@@ -437,7 +448,13 @@ async def back_to_date_from_price(callback: CallbackQuery, state: FSMContext):
 async def cancel_price(callback: CallbackQuery, state: FSMContext):
     """Отмена создания"""
     await state.clear()
-    await callback.message.edit_text("❌ Создание мероприятия отменено")
+    
+    if callback.message.text:
+        await callback.message.edit_text("❌ Создание мероприятия отменено")
+    else:
+        await callback.message.delete()
+        await callback.message.answer("❌ Создание мероприятия отменено")
+    
     await show_main_menu(callback.message)
     await callback.answer()
 
@@ -461,7 +478,6 @@ async def process_price(message: Message, state: FSMContext):
     await state.update_data(price=price)
     await state.set_state(CreateEventStates.waiting_for_participants)
     
-    # Используем InlineKeyboardBuilder для кнопок навигации
     builder = InlineKeyboardBuilder()
     builder.button(text="◀️ Назад", callback_data="back_to_price")
     builder.button(text="❌ Отмена", callback_data="cancel_participants")
@@ -491,7 +507,13 @@ async def back_to_price(callback: CallbackQuery, state: FSMContext):
 async def cancel_participants(callback: CallbackQuery, state: FSMContext):
     """Отмена создания"""
     await state.clear()
-    await callback.message.edit_text("❌ Создание мероприятия отменено")
+    
+    if callback.message.text:
+        await callback.message.edit_text("❌ Создание мероприятия отменено")
+    else:
+        await callback.message.delete()
+        await callback.message.answer("❌ Создание мероприятия отменено")
+    
     await show_main_menu(callback.message)
     await callback.answer()
 
@@ -560,7 +582,13 @@ async def skip_chat_link(callback: CallbackQuery, state: FSMContext):
 async def cancel_chat_link(callback: CallbackQuery, state: FSMContext):
     """Отмена создания"""
     await state.clear()
-    await callback.message.edit_text("❌ Создание мероприятия отменено")
+    
+    if callback.message.text:
+        await callback.message.edit_text("❌ Создание мероприятия отменено")
+    else:
+        await callback.message.delete()
+        await callback.message.answer("❌ Создание мероприятия отменено")
+    
     await show_main_menu(callback.message)
     await callback.answer()
 
@@ -708,11 +736,14 @@ async def edit_event(callback: CallbackQuery, state: FSMContext):
 
 @router.callback_query(F.data == "cancel_create")
 async def cancel_create(callback: CallbackQuery, state: FSMContext):
+    """Отмена создания"""
+    await state.clear()
+    
     if callback.message.text:
-        await callback.message.edit_text("❌ Создание отменено")
+        await callback.message.edit_text("❌ Создание мероприятия отменено")
     else:
         await callback.message.delete()
-        await callback.message.answer("❌ Создание отменено")
-    await state.clear()
+        await callback.message.answer("❌ Создание мероприятия отменено")
+    
     await show_main_menu(callback.message)
     await callback.answer()
