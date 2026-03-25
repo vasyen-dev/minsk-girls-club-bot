@@ -196,7 +196,6 @@ async def process_instagram(message: Message, state: FSMContext):
         instagram = None
         await message.answer("Окей, можно будет добавить позже ✨", reply_markup=None)
     else:
-        # Убираем @ если есть
         instagram = text.replace("@", "")
         await message.answer("Спасибо! 💗", reply_markup=None)
     

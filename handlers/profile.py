@@ -27,7 +27,6 @@ async def show_profile(message: Message):
         await message.answer("❌ Ты не зарегистрирована. Напиши /start")
         return
     
-    # Формируем текст анкеты без района и интересов
     profile_text = (
         f"🌸 *Твоя анкета*\n\n"
         f"👤 *Имя:* {user.name}\n"
@@ -35,9 +34,7 @@ async def show_profile(message: Message):
         f"📝 *О себе:* {user.bio or 'Не указано'}\n"
     )
     
-    # Instagram как ссылка, если указан
     if user.instagram:
-        # Убираем @ если есть
         insta_clean = user.instagram.replace("@", "")
         profile_text += f"📸 *Instagram:* [{user.instagram}](https://instagram.com/{insta_clean})\n"
     else:
@@ -258,7 +255,6 @@ async def edit_instagram_process(message: Message, state: FSMContext):
         new_instagram = None
         await message.answer("Instagram удалён")
     else:
-        # Убираем @ если есть
         new_instagram = new_instagram.replace("@", "")
         await message.answer("✅ Instagram обновлён!")
     
@@ -354,10 +350,19 @@ async def delete_profile_confirm(callback: CallbackQuery, state: FSMContext):
     await delete_user(user_id)
     
     await state.clear()
-    await callback.message.edit_text(
-        "💔 Твой профиль удалён.\n\n"
-        "Если захочешь вернуться — напиши /start в любой момент 🌸"
-    )
+    
+    if callback.message.text:
+        await callback.message.edit_text(
+            "💔 Твой профиль удалён.\n\n"
+            "Если захочешь вернуться — напиши /start в любой момент 🌸"
+        )
+    else:
+        await callback.message.delete()
+        await callback.message.answer(
+            "💔 Твой профиль удалён.\n\n"
+            "Если захочешь вернуться — напиши /start в любой момент 🌸"
+        )
+    
     await callback.answer()
 
 @router.callback_query(F.data == "back_to_profile")
